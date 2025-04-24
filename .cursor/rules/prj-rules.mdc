@@ -1,0 +1,9 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+- fix all errors.
+- check previous conversations and make sure everything is aligned.
+- always check for terminal
+
