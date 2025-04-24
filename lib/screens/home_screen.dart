@@ -91,6 +91,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final uncompletedItems = shoppingItems.where((item) => !item.isPurchased).toList();
 
     return SafeArea(
+      top: false,
       child: SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -127,13 +128,16 @@ class _HomeScreenState extends State<HomeScreen> {
                               fontWeight: FontWeight.bold,
                             ),
                       ),
-                      CircleAvatar(
-                        backgroundColor: Theme.of(context).colorScheme.onPrimary.withOpacity(0.2),
-                        radius: 24,
-                        child: Icon(
-                          currentUser?.isParent ?? false ? Icons.person : Icons.child_care,
-                          color: Theme.of(context).colorScheme.onPrimary,
-                          size: 24,
+                      GestureDetector(
+                        onTap: () => Navigator.pushNamed(context, '/profile'),
+                        child: CircleAvatar(
+                          backgroundColor: Theme.of(context).colorScheme.onPrimary.withOpacity(0.2),
+                          radius: 24,
+                          child: Icon(
+                            currentUser?.isParent ?? false ? Icons.person : Icons.child_care,
+                            color: Theme.of(context).colorScheme.onPrimary,
+                            size: 24,
+                          ),
                         ),
                       ),
                     ],
