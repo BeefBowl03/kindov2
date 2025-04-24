@@ -409,9 +409,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final assignee = appState.family?.getMember(task.assignedTo);
     final creator = appState.family?.getMember(task.createdBy);
     final titleController = TextEditingController(text: task.title);
-    final descriptionController = TextEditingController(text: task.description);
+    final descriptionController = TextEditingController(text: task.description ?? '');
     String? selectedMemberId = task.assignedTo;
-    DateTime selectedDate = task.dueDate;
+    DateTime selectedDate = task.dueDate ?? DateTime.now();
     int points = task.points;
     bool isEditing = false;
 
@@ -449,9 +449,9 @@ class _HomeScreenState extends State<HomeScreen> {
                             if (isEditing) {
                               // Reset values when canceling edit
                               titleController.text = task.title;
-                              descriptionController.text = task.description;
+                              descriptionController.text = task.description ?? '';
                               selectedMemberId = task.assignedTo;
-                              selectedDate = task.dueDate;
+                              selectedDate = task.dueDate ?? DateTime.now();
                               points = task.points;
                             }
                             isEditing = !isEditing;
@@ -554,9 +554,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                           maxLines: null,
                         )
-                      else if (task.description.isNotEmpty)
+                      else if (task.description?.isNotEmpty == true)
                         Text(
-                          task.description,
+                          task.description ?? '',
                           style: Theme.of(context).textTheme.bodyLarge!.copyWith(
                                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
                               ),

@@ -42,47 +42,140 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, appState, child) {
-        return Scaffold(
-          appBar: AppBar(
-            title: Text(
-              'Tasks',
-              style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                    fontWeight: FontWeight.bold,
+        return DefaultTabController(
+          length: 2,
+          child: Scaffold(
+            body: NestedScrollView(
+              headerSliverBuilder: (context, innerBoxIsScrolled) => [
+                // Tasks Banner
+                SliverToBoxAdapter(
+                  child: Container(
+                    height: 220,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Theme.of(context).colorScheme.primary,
+                          Theme.of(context).colorScheme.primaryContainer,
+                        ],
+                      ),
+                    ),
+                    child: SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  'Tasks',
+                                  style: Theme.of(context).textTheme.headlineMedium!.copyWith(
+                                    color: Theme.of(context).colorScheme.onPrimary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                if (appState.isParent || _tabController.index == 0)
+                                  IconButton(
+                                    icon: Icon(
+                                      Icons.add_circle_outline,
+                                      color: Theme.of(context).colorScheme.onPrimary,
+                                      size: 32,
+                                    ),
+                                    onPressed: () => _showAddTaskBottomSheet(context),
+                                  ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Track and manage your family\'s tasks',
+                              style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                                color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.8),
+                              ),
+                            ),
+                            const Spacer(),
+                            Row(
+                              children: [
+                                _buildStatCard(
+                                  context,
+                                  'Pending',
+                                  appState.tasks.where((task) => !task.isCompleted).length.toString(),
+                                ),
+                                const SizedBox(width: 16),
+                                _buildStatCard(
+                                  context,
+                                  'Completed',
+                                  appState.tasks.where((task) => task.isCompleted).length.toString(),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
-            ),
-            centerTitle: true,
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            elevation: 0,
-            bottom: TabBar(
-              controller: _tabController,
-              indicatorColor: Theme.of(context).colorScheme.primary,
-              labelColor: Theme.of(context).colorScheme.primary,
-              unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-              tabs: const [
-                Tab(text: 'My Tasks'),
-                Tab(text: 'Family Tasks'),
-              ],
-            ),
-            actions: [
-              if (appState.isParent || _tabController.index == 0)
-                IconButton(
-                  icon: Icon(
-                    Icons.add_circle_outline,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  onPressed: () => _showAddTaskBottomSheet(context),
                 ),
-            ],
-          ),
-          body: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildMyTasksTab(appState),
-              _buildFamilyTasksTab(appState),
-            ],
+                // Tab Bar
+                SliverPersistentHeader(
+                  pinned: true,
+                  delegate: _SliverAppBarDelegate(
+                    TabBar(
+                      controller: _tabController,
+                      indicatorColor: Theme.of(context).colorScheme.primary,
+                      labelColor: Theme.of(context).colorScheme.primary,
+                      unselectedLabelColor: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      tabs: const [
+                        Tab(text: 'My Tasks'),
+                        Tab(text: 'Family Tasks'),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+              body: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildMyTasksTab(appState),
+                  _buildFamilyTasksTab(appState),
+                ],
+              ),
+            ),
           ),
         );
       },
+    );
+  }
+
+  Widget _buildStatCard(BuildContext context, String label, String value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.8),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+                color: Theme.of(context).colorScheme.onPrimary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -427,9 +520,9 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     final assignee = appState.family?.getMember(task.assignedTo);
     final creator = appState.family?.getMember(task.createdBy);
     final titleController = TextEditingController(text: task.title);
-    final descriptionController = TextEditingController(text: task.description);
+    final descriptionController = TextEditingController(text: task.description ?? '');
     String? selectedMemberId = task.assignedTo;
-    DateTime selectedDate = task.dueDate;
+    DateTime selectedDate = task.dueDate ?? DateTime.now();
     int points = task.points;
     bool isEditing = false;
 
@@ -467,9 +560,9 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                             if (isEditing) {
                               // Reset values when canceling edit
                               titleController.text = task.title;
-                              descriptionController.text = task.description;
+                              descriptionController.text = task.description ?? '';
                               selectedMemberId = task.assignedTo;
-                              selectedDate = task.dueDate;
+                              selectedDate = task.dueDate ?? DateTime.now();
                               points = task.points;
                             }
                             isEditing = !isEditing;
@@ -574,9 +667,9 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                           controller: descriptionController,
                           isMultiline: true,
                         )
-                      else if (task.description.isNotEmpty)
+                      else if (task.description?.isNotEmpty == true)
                         Text(
-                          task.description,
+                          task.description ?? '',
                           style: Theme.of(context).textTheme.bodyLarge!.copyWith(
                                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
                               ),
@@ -816,5 +909,29 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
         ),
       ],
     );
+  }
+}
+
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar _tabBar;
+
+  _SliverAppBarDelegate(this._tabBar);
+
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Theme.of(context).colorScheme.surface,
+      child: _tabBar,
+    );
+  }
+
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) {
+    return false;
   }
 }

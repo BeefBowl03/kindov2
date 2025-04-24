@@ -91,6 +91,7 @@ class KinDoTextField extends StatelessWidget {
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
   final void Function(String)? onChanged;
+  final int? maxLines;
 
   const KinDoTextField({
     super.key,
@@ -101,6 +102,7 @@ class KinDoTextField extends StatelessWidget {
     this.keyboardType,
     this.validator,
     this.onChanged,
+    this.maxLines,
   });
 
   @override
@@ -136,7 +138,7 @@ class KinDoTextField extends StatelessWidget {
           contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
         style: Theme.of(context).textTheme.bodyLarge,
-        maxLines: isMultiline ? 5 : 1,
+        maxLines: maxLines ?? (isMultiline ? 5 : 1),
         keyboardType: keyboardType ?? (isMultiline ? TextInputType.multiline : TextInputType.text),
         validator: validator,
       ),

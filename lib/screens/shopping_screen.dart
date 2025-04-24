@@ -22,6 +22,10 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, appState, child) {
+        if (appState.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
         // Apply filtering
         List<ShoppingItem> items = appState.shoppingList;
         if (_filterValue == 'purchased') {
@@ -31,51 +35,162 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
         }
 
         return Scaffold(
-          appBar: AppBar(
-            title: Text(
-              'Shopping List',
-              style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                    fontWeight: FontWeight.bold,
+          body: CustomScrollView(
+            slivers: [
+              // Shopping List Banner
+              SliverToBoxAdapter(
+                child: Container(
+                  height: 220,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Theme.of(context).colorScheme.secondary,
+                        Theme.of(context).colorScheme.secondaryContainer,
+                      ],
+                    ),
                   ),
-            ),
-            centerTitle: true,
-            backgroundColor: Theme.of(context).colorScheme.surface,
-            elevation: 0,
-            actions: [
-              IconButton(
-                icon: Icon(
-                  Icons.add_circle_outline,
-                  color: Theme.of(context).colorScheme.primary,
+                  child: SafeArea(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Shopping List',
+                                style: Theme.of(context).textTheme.headlineMedium!.copyWith(
+                                  color: Theme.of(context).colorScheme.onSecondary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  Icons.add_circle_outline,
+                                  color: Theme.of(context).colorScheme.onSecondary,
+                                  size: 32,
+                                ),
+                                onPressed: () => _showAddItemSheet(context),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Keep track of your family\'s shopping needs',
+                            style: Theme.of(context).textTheme.titleMedium!.copyWith(
+                              color: Theme.of(context).colorScheme.onSecondary.withOpacity(0.8),
+                            ),
+                          ),
+                          const Spacer(),
+                          Row(
+                            children: [
+                              _buildStatCard(
+                                context,
+                                'Pending',
+                                items.where((item) => !item.isPurchased).length.toString(),
+                              ),
+                              const SizedBox(width: 16),
+                              _buildStatCard(
+                                context,
+                                'Purchased',
+                                items.where((item) => item.isPurchased).length.toString(),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
-                onPressed: () => _showAddItemBottomSheet(context),
               ),
+              // Filter Chips
+              SliverToBoxAdapter(
+                child: _buildFilterChips(),
+              ),
+              // Shopping Items List
+              if (items.isEmpty)
+                SliverFillRemaining(
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.shopping_cart_outlined,
+                          size: 64,
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No items in shopping list',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                        ),
+                        const SizedBox(height: 24),
+                        KinDoButton(
+                          text: 'Add Item',
+                          onPressed: () => _showAddItemSheet(context),
+                          icon: Icons.add,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final item = items[index];
+                      return ShoppingItemCard(
+                        item: item,
+                        onTap: () => _showEditItemSheet(context, item),
+                      );
+                    },
+                    childCount: items.length,
+                  ),
+                ),
             ],
           ),
-          body: Column(
-            children: [
-              _buildFilterChips(),
-              Expanded(
-                child: items.isEmpty
-                    ? EmptyStateWidget(
-                        message: 'Your shopping list is empty',
-                        icon: Icons.shopping_cart_outlined,
-                        actionLabel: 'Add Item',
-                        onAction: () => _showAddItemBottomSheet(context),
-                      )
-                    : _buildShoppingList(items, appState),
-              ),
-            ],
-          ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () => _showAddItemBottomSheet(context),
-            backgroundColor: Theme.of(context).colorScheme.secondary,
-            child: Icon(
-              Icons.add,
-              color: Theme.of(context).colorScheme.onSecondary,
-            ),
-          ),
+          floatingActionButton: items.isNotEmpty ? FloatingActionButton(
+            onPressed: () => _showAddItemSheet(context),
+            child: const Icon(Icons.add),
+          ) : null,
         );
       },
+    );
+  }
+
+  Widget _buildStatCard(BuildContext context, String label, String value) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.onSecondary.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: Theme.of(context).textTheme.bodyMedium!.copyWith(
+                color: Theme.of(context).colorScheme.onSecondary.withOpacity(0.8),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall!.copyWith(
+                color: Theme.of(context).colorScheme.onSecondary,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -137,272 +252,293 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
     );
   }
 
-  Widget _buildShoppingList(List<ShoppingItem> items, AppState appState) {
-    return ListView.builder(
-      padding: const EdgeInsets.only(bottom: 80),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return ShoppingItemCard(
-          item: item,
-          onEdit: () => _showEditItemBottomSheet(context, item),
-          onDelete: () {
-            // Show confirmation dialog
-            showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text('Delete Item'),
-                content: Text('Are you sure you want to delete "${item.name}"?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: Text(
-                      'Cancel',
-                      style: TextStyle(color: Theme.of(context).colorScheme.primary),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () {
-                      appState.deleteShoppingItem(item.id);
-                      Navigator.pop(context);
-                      
-                      // Show success message
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Item deleted'),
-                          backgroundColor: Theme.of(context).colorScheme.error,
-                        ),
-                      );
-                    },
-                    child: Text(
-                      'Delete',
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
-                    ),
-                  ),
-                ],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showAddItemBottomSheet(BuildContext context) {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final nameController = TextEditingController();
-    final quantityController = TextEditingController();
-
+  void _showAddItemSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.fromLTRB(
-          24,
-          16,
-          24,
-          MediaQuery.of(context).viewInsets.bottom + 24,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Add to Shopping List',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 16),
-              KinDoTextField(
-                label: 'Item Name',
-                hint: 'Enter item name',
-                controller: nameController,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter an item name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              KinDoTextField(
-                label: 'Quantity',
-                hint: 'How many? (e.g., 2, 1 gallon, 500g)',
-                controller: quantityController,
-              ),
-              const SizedBox(height: 24),
-              KinDoButton(
-                text: 'Add Item',
-                onPressed: () {
-                  if (nameController.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter an item name')),
-                    );
-                    return;
-                  }
-
-                  final newItem = ShoppingItem(
-                    id: const Uuid().v4(),
-                    name: nameController.text,
-                    quantity: int.tryParse(quantityController.text) ?? 1,
-                    addedBy: appState.currentUserId!,
-                  );
-
-                  appState.addShoppingItem(newItem);
-                  Navigator.pop(context);
-
-                  // Show success message
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Item added to shopping list'),
-                      backgroundColor: Theme.of(context).colorScheme.secondary,
-                    ),
-                  );
-                },
-                isPrimary: true,
-                isFullWidth: true,
-                icon: Icons.add_shopping_cart,
-              ),
-            ],
-          ),
-        ),
+        child: const _AddShoppingItemSheet(),
       ),
     );
   }
 
-  void _showEditItemBottomSheet(BuildContext context, ShoppingItem item) {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final nameController = TextEditingController(text: item.name);
-    final quantityController = TextEditingController(text: item.quantity.toString());
-
+  void _showEditItemSheet(BuildContext context, ShoppingItem item) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.fromLTRB(
-          24,
-          16,
-          24,
-          MediaQuery.of(context).viewInsets.bottom + 24,
+      useSafeArea: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
-          ),
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
+        child: _EditShoppingItemSheet(item: item),
+      ),
+    );
+  }
+}
+
+class _AddShoppingItemSheet extends StatefulWidget {
+  const _AddShoppingItemSheet();
+
+  @override
+  State<_AddShoppingItemSheet> createState() => _AddShoppingItemSheetState();
+}
+
+class _AddShoppingItemSheetState extends State<_AddShoppingItemSheet> {
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _quantityController = TextEditingController(text: '1');
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
+              Text(
+                'Add Shopping Item',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: 16),
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                KinDoTextField(
+                  label: 'Item Name',
+                  controller: _titleController,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter an item name';
+                    }
+                    return null;
+                  },
+                ),
+                KinDoTextField(
+                  label: 'Description (Optional)',
+                  controller: _descriptionController,
+                  maxLines: 2,
+                ),
+                KinDoTextField(
+                  label: 'Quantity',
+                  controller: _quantityController,
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a quantity';
+                    }
+                    final quantity = int.tryParse(value);
+                    if (quantity == null || quantity < 1) {
+                      return 'Please enter a valid quantity';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          KinDoButton(
+            text: 'Add Item',
+            onPressed: _handleSubmit,
+            isFullWidth: true,
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  void _handleSubmit() {
+    if (_formKey.currentState!.validate()) {
+      final appState = Provider.of<AppState>(context, listen: false);
+      final currentUser = appState.currentUser;
+      if (currentUser == null) return;
+
+      final item = ShoppingItem(
+        title: _titleController.text,
+        description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
+        quantity: int.parse(_quantityController.text),
+        addedBy: currentUser.id,
+      );
+
+      appState.addShoppingItem(item);
+      Navigator.pop(context);
+    }
+  }
+}
+
+class _EditShoppingItemSheet extends StatefulWidget {
+  final ShoppingItem item;
+
+  const _EditShoppingItemSheet({required this.item});
+
+  @override
+  State<_EditShoppingItemSheet> createState() => _EditShoppingItemSheetState();
+}
+
+class _EditShoppingItemSheetState extends State<_EditShoppingItemSheet> {
+  late final _formKey = GlobalKey<FormState>();
+  late final _titleController = TextEditingController(text: widget.item.title);
+  late final _descriptionController = TextEditingController(text: widget.item.description ?? '');
+  late final _quantityController = TextEditingController(text: widget.item.quantity.toString());
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
               Text(
                 'Edit Shopping Item',
-                style: Theme.of(context).textTheme.headlineSmall,
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-              const SizedBox(height: 16),
-              KinDoTextField(
-                label: 'Item Name',
-                hint: 'Enter item name',
-                controller: nameController,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter an item name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 8),
-              KinDoTextField(
-                label: 'Quantity',
-                hint: 'How many? (e.g., 2, 1 gallon, 500g)',
-                controller: quantityController,
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Switch(
-                    value: item.isPurchased,
-                    onChanged: (value) {
-                      appState.toggleShoppingItemPurchased(item.id);
-                    },
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    'Mark as purchased',
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-              KinDoButton(
-                text: 'Update Item',
-                onPressed: () {
-                  if (nameController.text.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter an item name')),
-                    );
-                    return;
-                  }
-
-                  final updatedItem = item.copyWith(
-                    name: nameController.text,
-                    quantity: int.tryParse(quantityController.text) ?? 1,
-                  );
-
-                  appState.updateShoppingItem(updatedItem);
-                  Navigator.pop(context);
-
-                  // Show success message
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text('Item updated'),
-                      backgroundColor: Theme.of(context).colorScheme.secondary,
-                    ),
-                  );
-                },
-                isPrimary: true,
-                isFullWidth: true,
+              IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => Navigator.pop(context),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 16),
+          Form(
+            key: _formKey,
+            child: Column(
+              children: [
+                KinDoTextField(
+                  label: 'Item Name',
+                  controller: _titleController,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter an item name';
+                    }
+                    return null;
+                  },
+                ),
+                KinDoTextField(
+                  label: 'Description (Optional)',
+                  controller: _descriptionController,
+                  maxLines: 2,
+                ),
+                KinDoTextField(
+                  label: 'Quantity',
+                  controller: _quantityController,
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter a quantity';
+                    }
+                    final quantity = int.tryParse(value);
+                    if (quantity == null || quantity < 1) {
+                      return 'Please enter a valid quantity';
+                    }
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: KinDoButton(
+                  text: 'Delete',
+                  onPressed: () => _showDeleteConfirmation(context),
+                  isPrimary: false,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: KinDoButton(
+                  text: 'Save',
+                  onPressed: _handleSubmit,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
       ),
     );
+  }
+
+  void _showDeleteConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Item'),
+        content: Text('Are you sure you want to delete "${widget.item.title}"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final appState = Provider.of<AppState>(context, listen: false);
+              appState.deleteShoppingItem(widget.item.id);
+              Navigator.pop(context); // Close confirmation dialog
+              Navigator.pop(context); // Close edit sheet
+            },
+            child: Text(
+              'Delete',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleSubmit() {
+    if (_formKey.currentState!.validate()) {
+      final appState = Provider.of<AppState>(context, listen: false);
+
+      final updatedItem = widget.item.copyWith(
+        title: _titleController.text,
+        description: _descriptionController.text.isEmpty ? null : _descriptionController.text,
+        quantity: int.parse(_quantityController.text),
+      );
+
+      appState.updateShoppingItem(updatedItem);
+      Navigator.pop(context);
+    }
   }
 }

@@ -1,12 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/home_screen.dart';
+import 'screens/login_screen.dart';
 import 'providers/app_state.dart';
 import 'services/storage_service.dart';
 import 'theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize Supabase
+  await Supabase.initialize(
+    url: 'https://cgthmzpuqvxeiwqtscsy.supabase.co',
+    anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNndGhtenB1cXZ4ZWl3cXRzY3N5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDU0NTA1ODEsImV4cCI6MjA2MTAyNjU4MX0.UZdzH0XbcTTAXh_6mI2bgTFW0bH2K_1u_y27kFdMM90',
+  );
+  
   final storageService = await StorageService.init();
   
   runApp(
@@ -25,7 +34,12 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'KinDo',
       theme: AppTheme.lightTheme,
-      home: const HomeScreen(),
+      initialRoute: '/login',
+      routes: {
+        '/': (context) => const SplashScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/home': (context) => const HomeScreen(),
+      },
     );
   }
 }

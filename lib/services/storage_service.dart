@@ -5,13 +5,14 @@ import '../models/family_model.dart';
 import 'package:uuid/uuid.dart';
 
 class StorageService {
-  final SharedPreferences _prefs;
+  late SharedPreferences _prefs;
 
-  StorageService(this._prefs);
+  StorageService._();
 
   static Future<StorageService> init() async {
-    final prefs = await SharedPreferences.getInstance();
-    return StorageService(prefs);
+    final service = StorageService._();
+    service._prefs = await SharedPreferences.getInstance();
+    return service;
   }
 
   // Keys for SharedPreferences
@@ -20,6 +21,15 @@ class StorageService {
   static const String _shoppingListKey = 'shoppingList';
   static const String _currentUserKey = 'current_user';
   static const String _lastUserIdKey = 'lastUserId';
+
+  // String operations
+  Future<void> setString(String key, String value) async {
+    await _prefs.setString(key, value);
+  }
+
+  String? getString(String key) {
+    return _prefs.getString(key);
+  }
 
   // Save family data
   Future<void> saveFamily(Family family) async {
@@ -53,18 +63,17 @@ class StorageService {
 
   // Save shopping list
   Future<void> saveShoppingList(List<ShoppingItem> items) async {
-    final itemsJson = items.map((item) => item.toJson()).toList();
-    await _prefs.setString(_shoppingListKey, jsonEncode(itemsJson));
+    final jsonList = items.map((item) => item.toJson()).toList();
+    await _prefs.setString(_shoppingListKey, jsonEncode(jsonList));
   }
 
   // Load shopping list
-  Future<List<ShoppingItem>> loadShoppingList() async {
-    final itemsJson = _prefs.getString(_shoppingListKey);
-    if (itemsJson != null) {
-      final List<dynamic> decoded = jsonDecode(itemsJson);
-      return decoded.map((item) => ShoppingItem.fromJson(item)).toList();
-    }
-    return [];
+  List<ShoppingItem> getShoppingList() {
+    final jsonString = _prefs.getString(_shoppingListKey);
+    if (jsonString == null) return [];
+
+    final jsonList = jsonDecode(jsonString) as List;
+    return jsonList.map((json) => ShoppingItem.fromJson(json)).toList();
   }
 
   // Save current user ID
@@ -94,6 +103,7 @@ class StorageService {
       // Create sample family
       final sampleFamily = Family(
         name: 'Smith Family',
+        createdBy: const Uuid().v4(), // Generate a temporary ID for the creator
         members: [
           FamilyMember(
             name: 'John Smith',
@@ -122,7 +132,6 @@ class StorageService {
       final now = DateTime.now();
       final sampleTasks = [
         TaskModel(
-          id: const Uuid().v4(),
           title: 'Take out the trash',
           description: 'Don\'t forget to separate recyclables',
           assignedTo: sampleFamily.members[2].id, // Assigned to Tommy
@@ -130,7 +139,6 @@ class StorageService {
           dueDate: now.add(const Duration(days: 1)),
         ),
         TaskModel(
-          id: const Uuid().v4(),
           title: 'Do homework',
           description: 'Math and Science assignments',
           assignedTo: sampleFamily.members[2].id, // Assigned to Tommy
@@ -138,7 +146,6 @@ class StorageService {
           dueDate: now.add(const Duration(days: 2)),
         ),
         TaskModel(
-          id: const Uuid().v4(),
           title: 'Clean bedroom',
           description: 'Make bed and put toys away',
           assignedTo: sampleFamily.members[3].id, // Assigned to Sarah
@@ -146,7 +153,6 @@ class StorageService {
           dueDate: now.add(const Duration(days: 1)),
         ),
         TaskModel(
-          id: const Uuid().v4(),
           title: 'Pay electricity bill',
           description: 'Due by end of month',
           assignedTo: sampleFamily.members[0].id, // Assigned to John
@@ -159,26 +165,22 @@ class StorageService {
       // Create sample shopping list
       final sampleShoppingList = [
         ShoppingItem(
-          id: const Uuid().v4(),
-          name: 'Milk',
+          title: 'Milk',
           quantity: 1,
           addedBy: sampleFamily.members[0].id, // Added by John
         ),
         ShoppingItem(
-          id: const Uuid().v4(),
-          name: 'Eggs',
+          title: 'Eggs',
           quantity: 1,
           addedBy: sampleFamily.members[1].id, // Added by Jane
         ),
         ShoppingItem(
-          id: const Uuid().v4(),
-          name: 'Bread',
+          title: 'Bread',
           quantity: 2,
           addedBy: sampleFamily.members[1].id, // Added by Jane
         ),
         ShoppingItem(
-          id: const Uuid().v4(),
-          name: 'Cereal',
+          title: 'Cereal',
           quantity: 1,
           addedBy: sampleFamily.members[2].id, // Added by Tommy
         ),
@@ -188,7 +190,7 @@ class StorageService {
   }
 
   // Clear all data
-  Future<void> clearAll() async {
+  Future<void> clear() async {
     await _prefs.clear();
   }
 }

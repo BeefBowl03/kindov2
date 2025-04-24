@@ -4,26 +4,26 @@ import 'package:intl/intl.dart';
 class TaskModel {
   final String id;
   final String title;
-  final String description;
+  final String? description;
   final String assignedTo;
   final String createdBy;
-  final DateTime dueDate;
+  final DateTime? dueDate;
   final bool isCompleted;
   final int points;
 
   TaskModel({
-    required this.id,
+    String? id,
     required this.title,
-    required this.description,
+    this.description,
     required this.assignedTo,
     required this.createdBy,
-    required this.dueDate,
+    this.dueDate,
     this.isCompleted = false,
     this.points = 0,
-  });
+  }) : id = id ?? const Uuid().v4();
 
   String get formattedDueDate {
-    return DateFormat('MMM dd, yyyy').format(dueDate);
+    return DateFormat('MMM dd, yyyy').format(dueDate ?? DateTime.now());
   }
 
   Map<String, dynamic> toJson() {
@@ -31,24 +31,24 @@ class TaskModel {
       'id': id,
       'title': title,
       'description': description,
-      'assignedTo': assignedTo,
-      'createdBy': createdBy,
-      'dueDate': dueDate.toIso8601String(),
-      'isCompleted': isCompleted,
+      'assigned_to': assignedTo,
+      'created_by': createdBy,
+      'due_date': dueDate?.toIso8601String(),
+      'is_completed': isCompleted,
       'points': points,
     };
   }
 
   factory TaskModel.fromJson(Map<String, dynamic> json) {
     return TaskModel(
-      id: json['id'] as String,
-      title: json['title'] as String,
-      description: json['description'] as String,
-      assignedTo: json['assignedTo'] as String,
-      createdBy: json['createdBy'] as String,
-      dueDate: DateTime.parse(json['dueDate'] as String),
-      isCompleted: json['isCompleted'] as bool? ?? false,
-      points: json['points'] as int? ?? 0,
+      id: json['id'],
+      title: json['title'],
+      description: json['description'],
+      assignedTo: json['assigned_to'],
+      createdBy: json['created_by'],
+      dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
+      isCompleted: json['is_completed'] ?? false,
+      points: json['points'] ?? 0,
     );
   }
 
@@ -77,49 +77,55 @@ class TaskModel {
 
 class ShoppingItem {
   final String id;
-  final String name;
+  final String title;
+  final String? description;
   final int quantity;
   final String addedBy;
   final bool isPurchased;
 
   ShoppingItem({
-    required this.id,
-    required this.name,
+    String? id,
+    required this.title,
+    this.description,
     required this.quantity,
     required this.addedBy,
     this.isPurchased = false,
-  });
+  }) : id = id ?? const Uuid().v4();
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
+      'title': title,
+      'description': description,
       'quantity': quantity,
-      'addedBy': addedBy,
-      'isPurchased': isPurchased,
+      'added_by': addedBy,
+      'is_purchased': isPurchased,
     };
   }
 
   factory ShoppingItem.fromJson(Map<String, dynamic> json) {
     return ShoppingItem(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      quantity: json['quantity'] as int,
-      addedBy: json['addedBy'] as String,
-      isPurchased: json['isPurchased'] as bool? ?? false,
+      id: json['id'],
+      title: json['title'],
+      description: json['description'],
+      quantity: json['quantity'],
+      addedBy: json['added_by'],
+      isPurchased: json['is_purchased'] ?? false,
     );
   }
 
   ShoppingItem copyWith({
     String? id,
-    String? name,
+    String? title,
+    String? description,
     int? quantity,
     String? addedBy,
     bool? isPurchased,
   }) {
     return ShoppingItem(
       id: id ?? this.id,
-      name: name ?? this.name,
+      title: title ?? this.title,
+      description: description ?? this.description,
       quantity: quantity ?? this.quantity,
       addedBy: addedBy ?? this.addedBy,
       isPurchased: isPurchased ?? this.isPurchased,
