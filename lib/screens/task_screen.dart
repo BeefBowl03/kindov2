@@ -424,187 +424,397 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
   }
 
   void _showTaskDetailsBottomSheet(BuildContext context, TaskModel task, AppState appState) {
-    final FamilyMember? assignee = appState.family?.getMember(task.assignedTo);
-    final FamilyMember? creator = appState.family?.getMember(task.createdBy);
+    final assignee = appState.family?.getMember(task.assignedTo);
+    final creator = appState.family?.getMember(task.createdBy);
+    final titleController = TextEditingController(text: task.title);
+    final descriptionController = TextEditingController(text: task.description);
+    String? selectedMemberId = task.assignedTo;
+    DateTime selectedDate = task.dueDate;
+    int points = task.points;
+    bool isEditing = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.7,
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Container(
+          height: MediaQuery.of(context).size.height * 0.7,
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surface,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Handle
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Handle and Top Bar
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    if (appState.isParent)
+                      IconButton(
+                        icon: Icon(
+                          isEditing ? Icons.close : Icons.edit,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            if (isEditing) {
+                              // Reset values when canceling edit
+                              titleController.text = task.title;
+                              descriptionController.text = task.description;
+                              selectedMemberId = task.assignedTo;
+                              selectedDate = task.dueDate;
+                              points = task.points;
+                            }
+                            isEditing = !isEditing;
+                          });
+                        },
+                      )
+                    else
+                      const SizedBox(width: 48), // Placeholder for alignment
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    if (appState.isParent && task.createdBy == appState.currentUserId)
+                      IconButton(
+                        icon: Icon(
+                          Icons.delete,
+                          color: Theme.of(context).colorScheme.error,
+                        ),
+                        onPressed: () {
+                          Navigator.pop(context);
+                          appState.deleteTask(task.id);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Task deleted')),
+                          );
+                        },
+                      )
+                    else
+                      const SizedBox(width: 48), // Placeholder for alignment
+                  ],
                 ),
               ),
-            ),
-            // Task Status
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    task.isCompleted ? 'Completed' : 'In Progress',
-                    style: Theme.of(context).textTheme.labelLarge!.copyWith(
-                          color: task.isCompleted
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.tertiary,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: (task.isCompleted
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.tertiary)
-                          .withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      'Due: ${task.formattedDueDate}',
-                      style: Theme.of(context).textTheme.bodySmall!.copyWith(
+              // Task Status
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      task.isCompleted ? 'Completed' : 'In Progress',
+                      style: Theme.of(context).textTheme.labelLarge!.copyWith(
                             color: task.isCompleted
                                 ? Theme.of(context).colorScheme.primary
                                 : Theme.of(context).colorScheme.tertiary,
-                            fontWeight: FontWeight.w500,
+                            fontWeight: FontWeight.bold,
                           ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            // Task Title
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 4),
-              child: Text(
-                task.title,
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-            ),
-            // Task Description
-            if (task.description.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-                child: Text(
-                  task.description,
-                  style: Theme.of(context).textTheme.bodyLarge!.copyWith(
-                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                    if (!isEditing)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: (task.isCompleted
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.tertiary)
+                              .withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'Due: ${task.formattedDueDate}',
+                          style: Theme.of(context).textTheme.bodySmall!.copyWith(
+                                color: task.isCompleted
+                                    ? Theme.of(context).colorScheme.primary
+                                    : Theme.of(context).colorScheme.tertiary,
+                                fontWeight: FontWeight.w500,
+                              ),
+                        ),
                       ),
+                  ],
                 ),
               ),
-            // Assignment Details
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Title
+                      if (isEditing)
+                        KinDoTextField(
+                          label: 'Title',
+                          controller: titleController,
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter a title';
+                            }
+                            return null;
+                          },
+                        )
+                      else
                         Text(
+                          task.title,
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                      const SizedBox(height: 16),
+                      // Description
+                      if (isEditing)
+                        KinDoTextField(
+                          label: 'Description',
+                          controller: descriptionController,
+                          isMultiline: true,
+                        )
+                      else if (task.description.isNotEmpty)
+                        Text(
+                          task.description,
+                          style: Theme.of(context).textTheme.bodyLarge!.copyWith(
+                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.8),
+                              ),
+                        ),
+                      const SizedBox(height: 16),
+                      // Assignee
+                      if (isEditing && appState.family != null)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Assign To',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: selectedMemberId,
+                                  isExpanded: true,
+                                  icon: Icon(
+                                    Icons.arrow_drop_down,
+                                    color: Theme.of(context).colorScheme.primary,
+                                  ),
+                                  items: appState.family!.members.map((member) {
+                                    return DropdownMenuItem<String>(
+                                      value: member.id,
+                                      child: Text(
+                                        member.name,
+                                        style: Theme.of(context).textTheme.bodyLarge,
+                                      ),
+                                    );
+                                  }).toList(),
+                                  onChanged: (value) {
+                                    if (value != null) {
+                                      setState(() {
+                                        selectedMemberId = value;
+                                      });
+                                    }
+                                  },
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      else if (assignee != null)
+                        _buildDetailRow(
+                          context,
                           'Assigned to',
-                          style: Theme.of(context).textTheme.labelMedium!.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                          assignee.name,
+                          Icons.person_outline,
+                        ),
+                      const SizedBox(height: 16),
+                      // Due Date
+                      if (isEditing)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Due Date',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            InkWell(
+                              onTap: () async {
+                                final DateTime? picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedDate,
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                                );
+                                if (picked != null) {
+                                  setState(() {
+                                    selectedDate = picked;
+                                  });
+                                }
+                              },
+                              borderRadius: BorderRadius.circular(12),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      DateFormat('MMMM dd, yyyy').format(selectedDate),
+                                      style: Theme.of(context).textTheme.bodyLarge,
+                                    ),
+                                    Icon(
+                                      Icons.calendar_today,
+                                      color: Theme.of(context).colorScheme.primary,
+                                      size: 20,
+                                    ),
+                                  ],
+                                ),
                               ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          assignee?.name ?? 'Unknown',
-                          style: Theme.of(context).textTheme.titleMedium,
+                      // Points
+                      if (isEditing)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const SizedBox(height: 16),
+                            Text(
+                              'Points',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            const SizedBox(height: 8),
+                            KinDoTextField(
+                              label: 'Points',
+                              keyboardType: TextInputType.number,
+                              controller: TextEditingController(text: points.toString()),
+                              onChanged: (value) {
+                                final newPoints = int.tryParse(value);
+                                if (newPoints != null) {
+                                  setState(() {
+                                    points = newPoints;
+                                  });
+                                }
+                              },
+                            ),
+                          ],
+                        )
+                      else
+                        _buildDetailRow(
+                          context,
+                          'Points',
+                          points.toString(),
+                          Icons.star_outline,
                         ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
+                      if (creator != null && !isEditing)
+                        _buildDetailRow(
+                          context,
                           'Created by',
-                          style: Theme.of(context).textTheme.labelMedium!.copyWith(
-                                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                              ),
+                          creator.name,
+                          Icons.create_outlined,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          creator?.name ?? 'Unknown',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-            const Spacer(),
-            // Actions
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                children: [
-                  if (task.assignedTo == appState.currentUserId || appState.isParent) ...[  
-                    Expanded(
-                      child: KinDoButton(
-                        text: task.isCompleted ? 'Mark as Incomplete' : 'Mark as Complete',
-                        onPressed: () {
-                          appState.toggleTaskCompletion(task.id);
-                          Navigator.pop(context);
-                        },
-                        isPrimary: !task.isCompleted,
-                        icon: task.isCompleted ? Icons.refresh : Icons.check_circle,
+              // Bottom Actions
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Row(
+                  children: [
+                    if (task.assignedTo == appState.currentUserId || appState.isParent) ...[
+                      Expanded(
+                        child: KinDoButton(
+                          text: task.isCompleted ? 'Mark as Incomplete' : 'Mark as Complete',
+                          onPressed: () {
+                            appState.toggleTaskCompletion(task.id);
+                            Navigator.pop(context);
+                          },
+                          isPrimary: !task.isCompleted,
+                          icon: task.isCompleted ? Icons.refresh : Icons.check_circle,
+                        ),
                       ),
-                    ),
-                  ],
-                  if (appState.isParent && task.createdBy == appState.currentUserId) ...[  
-                    if (task.assignedTo == appState.currentUserId || appState.isParent) 
-                      const SizedBox(width: 12),
-                    IconButton(
-                      onPressed: () {
-                        // Delete task
-                        Navigator.pop(context);
-                        appState.deleteTask(task.id);
-
-                        // Show success message
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: const Text('Task deleted'),
-                            backgroundColor: Theme.of(context).colorScheme.error,
-                          ),
-                        );
-                      },
-                      icon: Icon(
-                        Icons.delete,
-                        color: Theme.of(context).colorScheme.error,
+                    ],
+                    if (isEditing) ...[
+                      if (task.assignedTo == appState.currentUserId || appState.isParent)
+                        const SizedBox(width: 12),
+                      Expanded(
+                        child: KinDoButton(
+                          text: 'Save Changes',
+                          onPressed: () {
+                            final updatedTask = TaskModel(
+                              id: task.id,
+                              title: titleController.text,
+                              description: descriptionController.text,
+                              assignedTo: selectedMemberId!,
+                              createdBy: task.createdBy,
+                              dueDate: selectedDate,
+                              points: points,
+                              isCompleted: task.isCompleted,
+                            );
+                            appState.updateTask(updatedTask);
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Task updated')),
+                            );
+                          },
+                          isPrimary: true,
+                          icon: Icons.save,
+                        ),
                       ),
-                    ),
+                    ],
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDetailRow(BuildContext context, String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium!.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ],
+          ),
+        ),
+        Icon(
+          icon,
+          color: Theme.of(context).colorScheme.primary,
+          size: 20,
+        ),
+      ],
     );
   }
 }

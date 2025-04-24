@@ -90,6 +90,7 @@ class KinDoTextField extends StatelessWidget {
   final bool isMultiline;
   final TextInputType? keyboardType;
   final String? Function(String?)? validator;
+  final void Function(String)? onChanged;
 
   const KinDoTextField({
     super.key,
@@ -99,6 +100,7 @@ class KinDoTextField extends StatelessWidget {
     this.isMultiline = false,
     this.keyboardType,
     this.validator,
+    this.onChanged,
   });
 
   @override
@@ -107,6 +109,7 @@ class KinDoTextField extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: TextFormField(
         controller: controller,
+        onChanged: onChanged,
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
