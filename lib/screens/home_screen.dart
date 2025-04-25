@@ -517,7 +517,15 @@ class _HomeScreenState extends State<HomeScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
-                          'Due: ${task.formattedDueDate}',
+                          'Due: ${TaskModel(
+                            id: '',
+                            title: '',
+                            description: '',
+                            assignedTo: '',
+                            createdBy: '',
+                            dueDate: selectedDate,
+                            familyId: appState.family!.id,
+                          ).formattedDueDate}',
                           style: Theme.of(context).textTheme.bodySmall!.copyWith(
                                 color: task.isCompleted
                                     ? Theme.of(context).colorScheme.primary
@@ -623,6 +631,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 assignedTo: '',
                                 createdBy: '',
                                 dueDate: selectedDate,
+                                familyId: appState.family!.id,
                               ).formattedDueDate,
                             ),
                           ),
@@ -697,6 +706,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               dueDate: selectedDate,
                               points: points,
                               isCompleted: task.isCompleted,
+                              familyId: task.familyId,
                             );
                             appState.updateTask(updatedTask);
                             Navigator.pop(context);

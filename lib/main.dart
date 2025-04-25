@@ -4,9 +4,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/profile_screen.dart';
+import 'screens/password_setup_screen.dart';
 import 'providers/app_state.dart';
 import 'services/storage_service.dart';
+import 'services/deep_link_service.dart';
 import 'theme.dart';
+import 'package:flutter/foundation.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -21,26 +26,117 @@ void main() async {
   
   runApp(
     ChangeNotifierProvider(
-      create: (_) => AppState(storageService),
-      child: const MyApp(),
+      create: (context) => AppState(storageService),
+      child: const KinDoApp(),
     ),
   );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class KinDoApp extends StatefulWidget {
+  const KinDoApp({super.key});
+
+  @override
+  State<KinDoApp> createState() => _KinDoAppState();
+}
+
+class _KinDoAppState extends State<KinDoApp> {
+  final _deepLinkService = DeepLinkService();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupDeepLinks();
+    });
+  }
+
+  void _setupDeepLinks() {
+    _deepLinkService.handleInitialUri(_handleLink);
+    _deepLinkService.handleIncomingLinks(_handleLink);
+  }
+
+  void _handleLink(Uri uri) {
+    if (kIsWeb) {
+      // For web, handle the URL path and query parameters
+      if (uri.path.contains('verify-email')) {
+        final token = uri.queryParameters['token'];
+        final type = uri.queryParameters['type'];
+        
+        if (token != null && type == 'signup') {
+          navigatorKey.currentState?.pushReplacementNamed(
+            '/password-setup',
+            arguments: uri,
+          );
+        }
+      }
+    } else {
+      // For native platforms, handle the custom scheme
+      if (uri.host == 'verify-email') {
+        final token = uri.queryParameters['token'];
+        final type = uri.queryParameters['type'];
+        
+        if (token != null && type == 'signup') {
+          navigatorKey.currentState?.pushReplacementNamed(
+            '/password-setup',
+            arguments: uri,
+          );
+        }
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _deepLinkService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'KinDo',
       theme: AppTheme.lightTheme,
-      initialRoute: '/login',
+      initialRoute: '/',
       routes: {
-        '/': (context) => const SplashScreen(),
+        '/': (context) => const AuthWrapper(),
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
         '/profile': (context) => const ProfileScreen(),
+        '/password-setup': (context) {
+          final uri = ModalRoute.of(context)?.settings.arguments as Uri?;
+          final token = uri?.queryParameters['token'] ?? '';
+          return PasswordSetupScreen(token: token);
+        },
+      },
+    );
+  }
+}
+
+class AuthWrapper extends StatelessWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AppState>(
+      builder: (context, appState, child) {
+        if (appState.isLoading) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        // Check if we have a pending password setup
+        final uri = ModalRoute.of(context)?.settings.arguments as Uri?;
+        if (uri?.host == 'verify-email' && uri?.queryParameters['type'] == 'signup') {
+          return PasswordSetupScreen(token: uri?.queryParameters['token'] ?? '');
+        }
+        
+        return appState.isAuthenticated
+            ? const HomeScreen()
+            : const LoginScreen();
       },
     );
   }

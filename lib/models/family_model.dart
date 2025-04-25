@@ -45,7 +45,15 @@ class FamilyMember {
   Map<String, dynamic> toJson() => toMap();
 
   // Create from JSON (alias for fromMap)
-  factory FamilyMember.fromJson(Map<String, dynamic> json) => FamilyMember.fromMap(json);
+  factory FamilyMember.fromJson(Map<String, dynamic> json) {
+    return FamilyMember(
+      id: json['id'],
+      name: json['name'],
+      role: json['is_parent'] == true ? FamilyRole.parent : FamilyRole.child,
+      avatarUrl: json['avatar_url'],
+      points: json['points'] ?? 0,
+    );
+  }
 
   // Create a copy with updated fields
   FamilyMember copyWith({
@@ -71,15 +79,18 @@ class Family {
   final String createdBy;
   final List<FamilyMember> members;
   final DateTime createdAt;
+  final DateTime updatedAt;
 
   Family({
     String? id,
     required this.name,
     required this.createdBy,
-    this.members = const [],
+    required this.members,
     DateTime? createdAt,
-  })  : id = id ?? const Uuid().v4(),
-        createdAt = createdAt ?? DateTime.now();
+    DateTime? updatedAt,
+  }) : this.id = id ?? const Uuid().v4(),
+       this.createdAt = createdAt ?? DateTime.now(),
+       this.updatedAt = updatedAt ?? DateTime.now();
 
   // Convert Family to Map for storage
   Map<String, dynamic> toMap() {
@@ -87,29 +98,27 @@ class Family {
       'id': id,
       'name': name,
       'created_by': createdBy,
-      'members': members.map((member) => member.toMap()).toList(),
       'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
     };
-  }
-
-  // Create Family from Map
-  factory Family.fromMap(Map<String, dynamic> map) {
-    return Family(
-      id: map['id'],
-      name: map['name'],
-      createdBy: map['created_by'],
-      members: (map['members'] as List)
-          .map((memberMap) => FamilyMember.fromMap(memberMap))
-          .toList(),
-      createdAt: DateTime.parse(map['created_at']),
-    );
   }
 
   // Convert to JSON (alias for toMap)
   Map<String, dynamic> toJson() => toMap();
 
   // Create from JSON (alias for fromMap)
-  factory Family.fromJson(Map<String, dynamic> json) => Family.fromMap(json);
+  factory Family.fromJson(Map<String, dynamic> json) {
+    return Family(
+      id: json['id'],
+      name: json['name'],
+      createdBy: json['created_by'],
+      members: (json['members'] as List?)
+          ?.map((m) => FamilyMember.fromJson(m))
+          ?.toList() ?? [],
+      createdAt: DateTime.parse(json['created_at']),
+      updatedAt: DateTime.parse(json['updated_at']),
+    );
+  }
 
   // Get parent members
   List<FamilyMember> get parents {
@@ -137,6 +146,7 @@ class Family {
     String? createdBy,
     List<FamilyMember>? members,
     DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return Family(
       id: id ?? this.id,
@@ -144,6 +154,7 @@ class Family {
       createdBy: createdBy ?? this.createdBy,
       members: members ?? this.members,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 }

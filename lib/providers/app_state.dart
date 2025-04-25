@@ -5,10 +5,17 @@ import '../models/family_model.dart';
 import '../models/task_model.dart';
 import '../services/storage_service.dart';
 import '../services/supabase_service.dart';
+import '../services/auth_service.dart';
+import 'package:flutter/material.dart';
 
 class AppState extends ChangeNotifier {
   final StorageService _storage;
   final SupabaseService _supabase = SupabaseService();
+  final AuthService _auth = AuthService();
+  
+  // Add supabase getter
+  SupabaseClient get supabase => _supabase.client;
+
   Family? _family;
   FamilyMember? _currentUser;
   List<TaskModel> _tasks = [];
@@ -55,22 +62,20 @@ class AppState extends ChangeNotifier {
     required String password,
     required String name,
     required bool isParent,
+    required String familyName,
   }) async {
     try {
-      final response = await _supabase.signUp(
+      final response = await _auth.signUp(
         email: email,
         password: password,
         name: name,
         isParent: isParent,
+        familyName: familyName,
       );
       
       if (response.user != null) {
-        _currentUser = FamilyMember(
-          id: response.user!.id,
-          name: name,
-          role: isParent ? FamilyRole.parent : FamilyRole.child,
-        );
-        _isAuthenticated = true;
+        // Don't set authenticated until email is verified
+        _isAuthenticated = false;
         notifyListeners();
       }
     } catch (e) {
@@ -83,7 +88,7 @@ class AppState extends ChangeNotifier {
     required String password,
   }) async {
     try {
-      final response = await _supabase.signIn(
+      final response = await _auth.signIn(
         email: email,
         password: password,
       );
@@ -100,7 +105,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> signOut() async {
     try {
-      await _supabase.signOut();
+      await _auth.signOut();
       _isAuthenticated = false;
       _currentUser = null;
       _family = null;
@@ -117,32 +122,20 @@ class AppState extends ChangeNotifier {
     try {
       final session = Supabase.instance.client.auth.currentSession;
       if (session != null) {
+        try {
         await _loadUserData(session.user.id);
         _isAuthenticated = true;
-      } else {
-        // Initialize with sample data if no session exists
-        await _storage.initializeWithSampleDataIfNeeded();
-        final family = await _storage.loadFamily();
-        if (family != null) {
-          _family = family;
-          final lastUserId = await _storage.getLastUserId();
-          if (lastUserId != null) {
-            final member = _family!.getMember(lastUserId);
-            if (member != null) {
-              _currentUser = member;
-              _currentUserId = lastUserId;
-            } else {
-              _currentUser = _family!.members.first;
-              _currentUserId = _family!.members.first.id;
-            }
-          } else {
-            _currentUser = _family!.members.first;
-            _currentUserId = _family!.members.first.id;
-          }
-          _tasks = await _storage.loadTasks();
-          _shoppingList = _storage.getShoppingList();
+        } catch (e) {
+          debugPrint('Error loading user data: $e');
+          _isAuthenticated = false;
+          await Supabase.instance.client.auth.signOut();
         }
+      } else {
+        _isAuthenticated = false;
       }
+    } catch (e) {
+      debugPrint('Error in _initializeApp: $e');
+      _isAuthenticated = false;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -153,17 +146,36 @@ class AppState extends ChangeNotifier {
     try {
       // Load user profile
       final profile = await _supabase.getProfile(userId);
+      if (profile == null) {
+        throw Exception('Profile not found');
+      }
+
       _currentUser = FamilyMember(
         id: userId,
         name: profile['name'],
         role: profile['is_parent'] ? FamilyRole.parent : FamilyRole.child,
       );
+      _currentUserId = userId;
 
       // Load family data if user has one
       if (profile['family_id'] != null) {
         final familyData = await _supabase.getFamily(profile['family_id']);
         if (familyData != null) {
           _family = familyData;
+          
+          // Set up real-time subscriptions
+          _supabase.streamTasks(_family!.id).listen((tasks) {
+            _tasks = tasks.map((task) => TaskModel.fromJson(task)).toList();
+            notifyListeners();
+          });
+
+          _supabase.streamFamilyMembers(_family!.id).listen((members) async {
+            final updatedFamilyData = await _supabase.getFamily(_family!.id);
+            if (updatedFamilyData != null) {
+              _family = updatedFamilyData;
+              notifyListeners();
+            }
+          });
         }
       }
 
@@ -172,24 +184,9 @@ class AppState extends ChangeNotifier {
 
       // Load shopping list
       _shoppingList = _storage.getShoppingList();
-
-      // Set up real-time subscriptions
-      if (_family != null) {
-        _supabase.streamTasks(_family!.id).listen((tasks) {
-          _tasks = tasks.map((task) => TaskModel.fromJson(task)).toList();
-          notifyListeners();
-        });
-
-        _supabase.streamFamilyMembers(_family!.id).listen((members) async {
-          final familyData = await _supabase.getFamily(_family!.id);
-          if (familyData != null) {
-            _family = familyData;
-            notifyListeners();
-          }
-        });
-      }
     } catch (e) {
       debugPrint('Error loading user data: $e');
+      rethrow;
     }
   }
 
@@ -209,29 +206,61 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> addFamilyMember(FamilyMember member) async {
-    if (_family == null) return;
+    if (_family != null && isParent) {
+      try {
+        // First create a user profile
+        await _supabase.updateProfile(
+          userId: member.id,
+          name: member.name,
+          isParent: member.isParent,
+        );
 
-    final updatedMembers = [..._family!.members, member];
-    final updatedFamily = _family!.copyWith(members: updatedMembers);
-    await _supabase.updateFamily(updatedFamily);
-    _family = updatedFamily;
+        // Then add the member to the family
+        await _supabase.addFamilyMember(_family!.id, member.id);
+        
+        // Refresh family data
+        _family = await _supabase.getFamily(_family!.id);
     notifyListeners();
+      } catch (e) {
+        debugPrint('Error adding family member: $e');
+        rethrow;
+      }
+    }
   }
 
-  Future<void> updateFamilyMember(FamilyMember member) async {
-    if (_family == null) return;
-
-    final updatedMembers = _family!.members.map((m) {
-      if (m.id == member.id) {
-        return member;
+  Future<void> removeFamilyMember(String memberId) async {
+    if (_family != null && isParent) {
+      try {
+        await _supabase.removeFamilyMember(_family!.id, memberId);
+        
+        // Refresh family data
+        _family = await _supabase.getFamily(_family!.id);
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Error removing family member: $e');
+        rethrow;
       }
-      return m;
-    }).toList();
+    }
+  }
 
-    final updatedFamily = _family!.copyWith(members: updatedMembers);
-    await _supabase.updateFamily(updatedFamily);
-    _family = updatedFamily;
+  Future<void> updateFamilyMember(FamilyMember updatedMember) async {
+    if (_family != null && isParent) {
+      try {
+        // Update the profile
+        await _supabase.updateProfile(
+          userId: updatedMember.id,
+          name: updatedMember.name,
+          isParent: updatedMember.isParent,
+        );
+        
+        // Refresh family data
+        _family = await _supabase.getFamily(_family!.id);
     notifyListeners();
+      } catch (e) {
+        debugPrint('Error updating family member: $e');
+        rethrow;
+      }
+    }
   }
 
   Future<void> deleteFamilyMember(String memberId) async {
@@ -317,6 +346,101 @@ class AppState extends ChangeNotifier {
       );
       await _storage.saveShoppingList(_shoppingList);
       notifyListeners();
+    }
+  }
+
+  Future<void> loadFamily() async {
+    if (_currentUser == null) return;
+    
+    try {
+      final profile = await _supabase.getProfile(_currentUser!.id);
+      if (profile['family_id'] != null) {
+        final familyData = await _supabase.getFamily(profile['family_id']);
+        if (familyData != null) {
+          _family = familyData;
+          notifyListeners();
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading family data: $e');
+      rethrow;
+    }
+  }
+
+  Future<String> createFamilyMember({
+    required String email,
+    required String name,
+    required bool isParent,
+  }) async {
+    try {
+      // Send invitation email through Supabase
+      await _supabase.inviteFamilyMember(
+        email: email,
+        name: name,
+        isParent: isParent,
+        familyId: family!.id,
+      );
+
+      return 'Invitation sent! The new member will need to verify their email to join.';
+    } catch (e) {
+      throw Exception('Failed to invite family member: ${e.toString()}');
+    }
+  }
+
+  Future<void> setPasswordWithToken(String token, String password) async {
+    try {
+      final response = await supabase.auth.verifyOTP(
+        token: token,
+        type: OtpType.signup,
+      );
+
+      if (response.session == null) {
+        throw 'Invalid or expired token';
+      }
+
+      // Get the pending invitation for this email
+      final user = response.user;
+      if (user == null) throw 'User not found';
+      final email = user.email;
+      if (email == null) throw 'User email not found';
+
+      // Get the pending invitation
+      final invitationData = await supabase
+          .from('pending_invitations')
+          .select()
+          .eq('email', email)
+          .eq('status', 'pending')
+          .limit(1)
+          .single();
+
+      // Set the password
+      await supabase.auth.updateUser(
+        UserAttributes(password: password),
+      );
+
+      // Create the profile using the stored procedure
+      await supabase.rpc('create_user_profile', params: {
+        'user_id': user.id,
+        'user_name': invitationData['name'],
+        'user_email': email,
+        'is_parent': invitationData['is_parent'],
+        'family_name': null  // We don't need to create a new family since they're joining an existing one
+      });
+
+      // Add to family
+      await _supabase.addFamilyMember(
+        invitationData['family_id'],
+        user.id,
+      );
+
+      // Mark invitation as accepted
+      await supabase
+          .from('pending_invitations')
+          .update({'status': 'accepted'})
+          .eq('id', invitationData['id']);
+
+    } catch (e) {
+      throw 'Failed to set password: ${e.toString()}';
     }
   }
 } 

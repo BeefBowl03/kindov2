@@ -10,6 +10,7 @@ class TaskModel {
   final DateTime? dueDate;
   final bool isCompleted;
   final int points;
+  final String familyId;
 
   TaskModel({
     String? id,
@@ -20,6 +21,7 @@ class TaskModel {
     this.dueDate,
     this.isCompleted = false,
     this.points = 0,
+    required this.familyId,
   }) : id = id ?? const Uuid().v4();
 
   String get formattedDueDate {
@@ -36,6 +38,7 @@ class TaskModel {
       'due_date': dueDate?.toIso8601String(),
       'is_completed': isCompleted,
       'points': points,
+      'family_id': familyId,
     };
   }
 
@@ -49,6 +52,7 @@ class TaskModel {
       dueDate: json['due_date'] != null ? DateTime.parse(json['due_date']) : null,
       isCompleted: json['is_completed'] ?? false,
       points: json['points'] ?? 0,
+      familyId: json['family_id'],
     );
   }
 
@@ -61,6 +65,7 @@ class TaskModel {
     DateTime? dueDate,
     bool? isCompleted,
     int? points,
+    String? familyId,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -71,6 +76,7 @@ class TaskModel {
       dueDate: dueDate ?? this.dueDate,
       isCompleted: isCompleted ?? this.isCompleted,
       points: points ?? this.points,
+      familyId: familyId ?? this.familyId,
     );
   }
 }

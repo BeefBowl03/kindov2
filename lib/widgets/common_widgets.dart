@@ -92,6 +92,7 @@ class KinDoTextField extends StatelessWidget {
   final String? Function(String?)? validator;
   final void Function(String)? onChanged;
   final int? maxLines;
+  final bool obscureText;
 
   const KinDoTextField({
     super.key,
@@ -103,6 +104,7 @@ class KinDoTextField extends StatelessWidget {
     this.validator,
     this.onChanged,
     this.maxLines,
+    this.obscureText = false,
   });
 
   @override
@@ -112,6 +114,7 @@ class KinDoTextField extends StatelessWidget {
       child: TextFormField(
         controller: controller,
         onChanged: onChanged,
+        obscureText: obscureText,
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,

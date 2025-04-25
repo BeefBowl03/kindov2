@@ -7,9 +7,14 @@ import '../widgets/common_widgets.dart';
 import 'package:uuid/uuid.dart';
 
 
-class FamilyScreen extends StatelessWidget {
+class FamilyScreen extends StatefulWidget {
   const FamilyScreen({super.key});
 
+  @override
+  State<FamilyScreen> createState() => _FamilyScreenState();
+}
+
+class _FamilyScreenState extends State<FamilyScreen> {
   @override
   Widget build(BuildContext context) {
     return Consumer<AppState>(
@@ -76,13 +81,7 @@ class FamilyScreen extends StatelessWidget {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                family.name,
-                                style: Theme.of(context).textTheme.titleLarge!.copyWith(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
+                              const Spacer(),
                               if (appState.isParent)
                                 IconButton(
                                   icon: const Icon(Icons.person_add, color: Colors.white),
@@ -244,63 +243,87 @@ class FamilyScreen extends StatelessWidget {
 
   void _showAddFamilyMemberBottomSheet(BuildContext context) {
     final nameController = TextEditingController();
+    final emailController = TextEditingController();
     bool isParent = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setModalState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 'Add Family Member',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
-              KinDoTextField(
+              TextField(
                 controller: nameController,
-                label: 'Name',
-                hint: 'Enter name',
-              ),
-              const SizedBox(height: 16),
-              StatefulBuilder(
-                builder: (context, setState) => SwitchListTile(
-                  title: const Text('Is Parent?'),
-                  value: isParent,
-                  onChanged: (value) {
-                    setState(() {
-                      isParent = value;
-                    });
-                  },
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                title: const Text('Is Parent?'),
+                value: isParent,
+                onChanged: (value) => setModalState(() => isParent = value),
+              ),
+              const SizedBox(height: 16),
               KinDoButton(
-                text: 'Add Member',
-                onPressed: () {
-                  if (nameController.text.isNotEmpty) {
-                    final appState = Provider.of<AppState>(context, listen: false);
-                    final newMember = FamilyMember(
-                      name: nameController.text,
-                      role: isParent ? FamilyRole.parent : FamilyRole.child,
-                    );
-                    appState.addFamilyMember(newMember);
-                    Navigator.pop(context);
+                text: 'Send Invitation',
+                onPressed: () async {
+                  if (nameController.text.isNotEmpty && 
+                      emailController.text.isNotEmpty) {
+                    try {
+                      final appState = Provider.of<AppState>(context, listen: false);
+                      final family = appState.family;
+                      if (family == null) return;
+
+                      final message = await appState.createFamilyMember(
+                        email: emailController.text,
+                        name: nameController.text,
+                        isParent: isParent,
+                      );
+                      
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(message),
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                        Navigator.pop(context);
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error adding member: ${e.toString()}'),
+                            backgroundColor: Theme.of(context).colorScheme.error,
+                          ),
+                        );
+                      }
+                    }
                   }
                 },
                 isPrimary: true,
@@ -313,64 +336,82 @@ class FamilyScreen extends StatelessWidget {
   }
 
   void _showEditFamilyMemberBottomSheet(BuildContext context, FamilyMember member) {
+    // Don't allow changing role of the last parent
+    final appState = Provider.of<AppState>(context, listen: false);
+    final isLastParent = member.isParent && appState.family?.parents.length == 1;
+
     final nameController = TextEditingController(text: member.name);
     bool isParent = member.isParent;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.surface,
-          borderRadius: const BorderRadius.only(
-            topLeft: Radius.circular(24),
-            topRight: Radius.circular(24),
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setModalState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+            left: 16,
+            right: 16,
+            top: 16,
           ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
                 'Edit Family Member',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
-              KinDoTextField(
+              TextField(
                 controller: nameController,
-                label: 'Name',
-                hint: 'Enter name',
-              ),
-              const SizedBox(height: 16),
-              StatefulBuilder(
-                builder: (context, setState) => SwitchListTile(
-                  title: const Text('Is Parent?'),
-                  value: isParent,
-                  onChanged: (value) {
-                    setState(() {
-                      isParent = value;
-                    });
-                  },
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  border: OutlineInputBorder(),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              SwitchListTile(
+                title: const Text('Is Parent?'),
+                value: isParent,
+                onChanged: isLastParent ? null : (value) => setModalState(() => isParent = value),
+                subtitle: isLastParent 
+                  ? const Text('Cannot change role of the last parent', 
+                      style: TextStyle(color: Colors.red))
+                  : null,
+              ),
+              const SizedBox(height: 16),
               KinDoButton(
                 text: 'Save Changes',
-                onPressed: () {
+                onPressed: () async {
                   if (nameController.text.isNotEmpty) {
-                    final appState = Provider.of<AppState>(context, listen: false);
-                    final updatedMember = member.copyWith(
-                      name: nameController.text,
-                      role: isParent ? FamilyRole.parent : FamilyRole.child,
-                    );
-                    appState.updateFamilyMember(updatedMember);
-                    Navigator.pop(context);
+                    try {
+                      final updatedMember = member.copyWith(
+                        name: nameController.text,
+                        role: isParent ? FamilyRole.parent : FamilyRole.child,
+                      );
+                      await appState.updateFamilyMember(updatedMember);
+                      
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Member updated successfully'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                        
+                        Navigator.pop(context);
+                      }
+                    } catch (e) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error updating member: ${e.toString()}'),
+                            backgroundColor: Theme.of(context).colorScheme.error,
+                          ),
+                        );
+                      }
+                    }
                   }
                 },
                 isPrimary: true,
@@ -383,6 +424,28 @@ class FamilyScreen extends StatelessWidget {
   }
 
   void _showDeleteConfirmationDialog(BuildContext context, AppState appState, FamilyMember member) {
+    // Don't allow deleting the last parent
+    if (member.isParent && appState.family?.parents.length == 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot delete the last parent in the family'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Don't allow deleting yourself
+    if (member.id == appState.currentUserId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot delete your own account'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -394,16 +457,29 @@ class FamilyScreen extends StatelessWidget {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              appState.deleteFamilyMember(member.id);
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Family member removed'),
-                  duration: Duration(seconds: 2),
-                ),
-              );
+            onPressed: () async {
+              try {
+                Navigator.pop(context);
+                await appState.removeFamilyMember(member.id);
+                
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Family member removed successfully'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error removing member: ${e.toString()}'),
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                  );
+                }
+              }
             },
             child: Text(
               'Delete',

@@ -492,6 +492,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                       createdBy: appState.currentUserId!,
                       dueDate: selectedDate,
                       points: points,
+                      familyId: appState.family!.id,
                     );
 
                     appState.addTask(newTask);
@@ -859,6 +860,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                               dueDate: selectedDate,
                               points: points,
                               isCompleted: task.isCompleted,
+                              familyId: task.familyId,
                             );
                             appState.updateTask(updatedTask);
                             Navigator.pop(context);

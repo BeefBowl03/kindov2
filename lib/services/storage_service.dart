@@ -137,6 +137,7 @@ class StorageService {
           assignedTo: sampleFamily.members[2].id, // Assigned to Tommy
           createdBy: sampleFamily.members[0].id, // Created by John
           dueDate: now.add(const Duration(days: 1)),
+          familyId: sampleFamily.id,
         ),
         TaskModel(
           title: 'Do homework',
@@ -144,6 +145,7 @@ class StorageService {
           assignedTo: sampleFamily.members[2].id, // Assigned to Tommy
           createdBy: sampleFamily.members[1].id, // Created by Jane
           dueDate: now.add(const Duration(days: 2)),
+          familyId: sampleFamily.id,
         ),
         TaskModel(
           title: 'Clean bedroom',
@@ -151,6 +153,7 @@ class StorageService {
           assignedTo: sampleFamily.members[3].id, // Assigned to Sarah
           createdBy: sampleFamily.members[1].id, // Created by Jane
           dueDate: now.add(const Duration(days: 1)),
+          familyId: sampleFamily.id,
         ),
         TaskModel(
           title: 'Pay electricity bill',
@@ -158,6 +161,7 @@ class StorageService {
           assignedTo: sampleFamily.members[0].id, // Assigned to John
           createdBy: sampleFamily.members[0].id, // Created by John
           dueDate: now.add(const Duration(days: 5)),
+          familyId: sampleFamily.id,
         ),
       ];
       await saveTasks(sampleTasks);
