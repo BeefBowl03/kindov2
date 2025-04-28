@@ -1,0 +1,33 @@
+name: Build and Deploy Flutter Web to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - feature/new-branch
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Flutter
+      uses: subosito/flutter-action@v2
+      with:
+        flutter-version: '3.19.0' # Change if you're using a different Flutter version
+
+    - name: Install dependencies
+      run: flutter pub get
+
+    - name: Build Flutter Web
+      run: flutter build web --release
+
+    - name: Deploy to GitHub Pages
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./build/web
