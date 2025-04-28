@@ -176,14 +176,21 @@ class AppState extends ChangeNotifier {
               notifyListeners();
             }
           });
+
+          // Load shopping list
+          await loadShoppingList();
+
+          // Set up shopping list subscription
+          _supabase.streamShoppingList(_family!.id).listen((items) {
+            _shoppingList = items;
+            _storage.saveShoppingList(items);
+            notifyListeners();
+          });
         }
       }
 
       // Load tasks
       _tasks = await _supabase.getTasks();
-
-      // Load shopping list
-      _shoppingList = _storage.getShoppingList();
     } catch (e) {
       debugPrint('Error loading user data: $e');
       rethrow;
@@ -318,7 +325,10 @@ class AppState extends ChangeNotifier {
 
   // Shopping List Management
   Future<void> addShoppingItem(ShoppingItem item) async {
-    _shoppingList.add(item);
+    if (_family == null) return;
+    
+    final newItem = await _supabase.createShoppingItem(item, _family!.id);
+    _shoppingList.add(newItem);
     await _storage.saveShoppingList(_shoppingList);
     notifyListeners();
   }
@@ -326,13 +336,15 @@ class AppState extends ChangeNotifier {
   Future<void> updateShoppingItem(ShoppingItem item) async {
     final index = _shoppingList.indexWhere((i) => i.id == item.id);
     if (index != -1) {
-      _shoppingList[index] = item;
+      final updatedItem = await _supabase.updateShoppingItem(item);
+      _shoppingList[index] = updatedItem;
       await _storage.saveShoppingList(_shoppingList);
       notifyListeners();
     }
   }
 
   Future<void> deleteShoppingItem(String itemId) async {
+    await _supabase.deleteShoppingItem(itemId);
     _shoppingList.removeWhere((item) => item.id == itemId);
     await _storage.saveShoppingList(_shoppingList);
     notifyListeners();
@@ -341,11 +353,26 @@ class AppState extends ChangeNotifier {
   Future<void> toggleShoppingItemPurchased(String itemId) async {
     final index = _shoppingList.indexWhere((i) => i.id == itemId);
     if (index != -1) {
-      _shoppingList[index] = _shoppingList[index].copyWith(
-        isPurchased: !_shoppingList[index].isPurchased,
+      final item = _shoppingList[index];
+      final updatedItem = await _supabase.updateShoppingItem(
+        item.copyWith(isPurchased: !item.isPurchased),
       );
+      _shoppingList[index] = updatedItem;
       await _storage.saveShoppingList(_shoppingList);
       notifyListeners();
+    }
+  }
+
+  Future<void> loadShoppingList() async {
+    if (_family == null) return;
+    
+    try {
+      _shoppingList = await _supabase.getShoppingList(_family!.id);
+      await _storage.saveShoppingList(_shoppingList);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading shopping list: $e');
+      rethrow;
     }
   }
 
@@ -389,58 +416,92 @@ class AppState extends ChangeNotifier {
 
   Future<void> setPasswordWithToken(String token, String password) async {
     try {
-      final response = await supabase.auth.verifyOTP(
-        token: token,
-        type: OtpType.signup,
-      );
+      // Verify the invitation token and get the invitation ID
+      final invitationId = await supabase.rpc('verify_invitation_token', params: {
+        'token': token,
+      });
 
-      if (response.session == null) {
-        throw 'Invalid or expired token';
-      }
-
-      // Get the pending invitation for this email
-      final user = response.user;
-      if (user == null) throw 'User not found';
-      final email = user.email;
-      if (email == null) throw 'User email not found';
-
-      // Get the pending invitation
+      // Get the invitation details
       final invitationData = await supabase
           .from('pending_invitations')
           .select()
-          .eq('email', email)
-          .eq('status', 'pending')
-          .limit(1)
+          .eq('id', invitationId)
           .single();
 
-      // Set the password
-      await supabase.auth.updateUser(
-        UserAttributes(password: password),
+      // Create the user with email and password
+      final response = await supabase.auth.signUp(
+        email: invitationData['email'],
+        password: password,
       );
 
-      // Create the profile using the stored procedure
+      if (response.user == null) {
+        throw 'Failed to create user';
+      }
+
+      // Create the profile and add to family in a single transaction
       await supabase.rpc('create_user_profile', params: {
-        'user_id': user.id,
+        'user_id': response.user!.id,
         'user_name': invitationData['name'],
-        'user_email': email,
+        'user_email': invitationData['email'],
         'is_parent': invitationData['is_parent'],
-        'family_name': null  // We don't need to create a new family since they're joining an existing one
+        'family_name': null  // Don't create a new family since they're joining an existing one
       });
 
       // Add to family
-      await _supabase.addFamilyMember(
-        invitationData['family_id'],
-        user.id,
-      );
+      await supabase
+          .from('family_members')
+          .insert({
+            'family_id': invitationData['family_id'],
+            'user_id': response.user!.id,
+          });
 
       // Mark invitation as accepted
       await supabase
           .from('pending_invitations')
           .update({'status': 'accepted'})
-          .eq('id', invitationData['id']);
+          .eq('id', invitationId);
 
     } catch (e) {
       throw 'Failed to set password: ${e.toString()}';
+    }
+  }
+
+  Future<void> completeInvitation(Map<String, dynamic> invitationData) async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) throw 'No authenticated user';
+      final email = user.email;
+      if (email == null) throw 'User email not found';
+
+      // Create the profile
+      await supabase.from('profiles').insert({
+        'id': user.id,
+        'name': invitationData['name'],
+        'email': email,
+        'is_parent': invitationData['is_parent'],
+      });
+
+      // Add to family
+      await supabase.from('family_members').insert({
+        'family_id': invitationData['family_id'],
+        'user_id': user.id,
+      });
+
+      // Get and update the pending invitation
+      final invitation = await supabase
+          .from('pending_invitations')
+          .select()
+          .eq('email', email)
+          .eq('status', 'pending')
+          .single();
+
+      await supabase
+          .from('pending_invitations')
+          .update({'status': 'accepted'})
+          .eq('id', invitation['id']);
+
+    } catch (e) {
+      throw 'Failed to complete invitation: ${e.toString()}';
     }
   }
 } 

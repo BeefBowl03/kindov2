@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/task_model.dart';
 import '../models/family_model.dart';
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 class SupabaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -33,10 +34,15 @@ class SupabaseService {
     required String email,
     required String password,
   }) async {
-    return await _supabase.auth.signInWithPassword(
+    final response = await _supabase.auth.signInWithPassword(
       email: email,
       password: password,
     );
+
+    // Check if this is an invited user logging in for the first time
+    await handleInvitedUserLogin();
+
+    return response;
   }
 
   Future<void> signOut() async {
@@ -105,11 +111,11 @@ class SupabaseService {
     try {
       // First get the family details
       final familyResponse = await _supabase
-          .from('families')
+        .from('families')
           .select()
-          .eq('id', familyId)
-          .single();
-      
+        .eq('id', familyId)
+        .single();
+    
       if (familyResponse == null) return null;
 
       // Then get the family members with their profiles
@@ -186,11 +192,11 @@ class SupabaseService {
     try {
       // Get the profile
       final profileResponse = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', userId)
-          .single();
-      
+        .from('profiles')
+        .select()
+        .eq('id', userId)
+        .single();
+    
       // Get the family member record
       final familyMemberResponse = await _supabase
           .from('family_members')
@@ -306,33 +312,98 @@ class SupabaseService {
         throw Exception('There is already a pending invitation for this email');
       }
 
-      // Create a new invitation
+      // Generate a secure token
+      final token = const Uuid().v4();
+
+      // Create a new invitation record
       await _supabase.from('pending_invitations').insert({
         'email': email,
         'name': name,
         'is_parent': isParent,
         'family_id': familyId,
         'status': 'pending',
+        'token': token,
         'expires_at': DateTime.now().add(const Duration(days: 7)).toIso8601String(),
       });
 
-      // Send the magic link for email verification
-      final redirectTo = kIsWeb 
-          ? '${Uri.base.origin}/verify-email?type=signup'
-          : 'kindo://verify-email?type=signup';
+      // Generate invitation URL with token
+      final redirectUrl = kIsWeb 
+          ? '${Uri.base.origin}/#/password-setup?token=$token'
+          : 'kindo://password-setup?token=$token';
 
-      await _supabase.auth.signInWithOtp(
+      // Send signup email with redirect
+      await _supabase.auth.signUp(
         email: email,
-        emailRedirectTo: redirectTo,
+        password: const Uuid().v4(), // Temporary password
+        emailRedirectTo: redirectUrl,
         data: {
-          'invitation_type': 'family_member',
+          'type': 'invitation',
+          'name': name,
+          'is_parent': isParent,
           'family_id': familyId,
-          'type': 'signup',
+          'token': token,
         },
       );
+
     } catch (e) {
       throw Exception('Failed to invite family member: ${e.toString()}');
     }
+  }
+
+  // Add a method to handle first-time login for invited users
+  Future<void> handleInvitedUserLogin() async {
+    try {
+      final user = _supabase.auth.currentUser;
+      final email = user?.email;
+      if (user == null || email == null) return;
+
+      // Check if they already have a profile
+      final existingProfile = await _supabase
+          .from('profiles')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (existingProfile != null) return; // Already set up
+
+      // Get their pending invitation
+      final invitation = await _supabase
+          .from('pending_invitations')
+          .select()
+          .eq('email', email)
+          .eq('status', 'pending')
+          .maybeSingle();
+
+      if (invitation == null) return; // No pending invitation
+
+      // Create their profile
+      await _supabase.from('profiles').insert({
+        'id': user.id,
+        'email': email,
+        'name': invitation['name'],
+        'is_parent': invitation['is_parent'],
+      });
+
+      // Add them to the family
+      await _supabase.from('family_members').insert({
+        'family_id': invitation['family_id'],
+        'user_id': user.id,
+      });
+
+      // Mark invitation as used
+      await _supabase
+          .from('pending_invitations')
+          .update({'status': 'used'})
+          .eq('id', invitation['id']);
+
+    } catch (e) {
+      throw Exception('Failed to set up invited user: ${e.toString()}');
+    }
+  }
+
+  String _generateSecureToken() {
+    // Generate a random UUID for the token
+    return const Uuid().v4();
   }
 
   Future<List<Map<String, dynamic>>> getPendingInvitations(String familyId) async {
@@ -362,5 +433,87 @@ class SupabaseService {
     } catch (e) {
       throw Exception('Failed to cancel invitation: ${e.toString()}');
     }
+  }
+
+  // Shopping List Operations
+  Future<List<ShoppingItem>> getShoppingList(String familyId) async {
+    final response = await _supabase
+        .from('shopping_items')
+        .select()
+        .eq('family_id', familyId)
+        .order('created_at', ascending: false);
+
+    return response.map((item) => ShoppingItem.fromJson({
+      'id': item['id'],
+      'title': item['name'],
+      'quantity': item['quantity'],
+      'is_purchased': item['is_purchased'],
+      'added_by': item['created_by'],
+    })).toList();
+  }
+
+  Future<ShoppingItem> createShoppingItem(ShoppingItem item, String familyId) async {
+    final response = await _supabase
+        .from('shopping_items')
+        .insert({
+          'family_id': familyId,
+          'name': item.title,
+          'quantity': item.quantity,
+          'is_purchased': item.isPurchased,
+          'created_by': item.addedBy,
+        })
+        .select()
+        .single();
+
+    return ShoppingItem.fromJson({
+      'id': response['id'],
+      'title': response['name'],
+      'quantity': response['quantity'],
+      'is_purchased': response['is_purchased'],
+      'added_by': response['created_by'],
+    });
+  }
+
+  Future<ShoppingItem> updateShoppingItem(ShoppingItem item) async {
+    final response = await _supabase
+        .from('shopping_items')
+        .update({
+          'name': item.title,
+          'quantity': item.quantity,
+          'is_purchased': item.isPurchased,
+        })
+        .eq('id', item.id)
+        .select()
+        .single();
+
+    return ShoppingItem.fromJson({
+      'id': response['id'],
+      'title': response['name'],
+      'quantity': response['quantity'],
+      'is_purchased': response['is_purchased'],
+      'added_by': response['created_by'],
+    });
+  }
+
+  Future<void> deleteShoppingItem(String itemId) async {
+    await _supabase
+        .from('shopping_items')
+        .delete()
+        .eq('id', itemId);
+  }
+
+  Stream<List<ShoppingItem>> streamShoppingList(String familyId) {
+    return _supabase
+        .from('shopping_items')
+        .stream(primaryKey: ['id'])
+        .eq('family_id', familyId)
+        .order('created_at', ascending: false)
+        .map((items) => items.map((item) => ShoppingItem.fromJson({
+          'id': item['id'],
+          'title': item['name'],
+          'quantity': item['quantity'],
+          'is_purchased': item['is_purchased'],
+          'added_by': item['created_by'],
+        })).toList());
   }
 } 

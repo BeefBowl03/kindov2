@@ -6,6 +6,8 @@ CREATE TABLE pending_invitations (
     is_parent BOOLEAN NOT NULL DEFAULT false,
     family_id UUID REFERENCES families(id) ON DELETE CASCADE,
     status TEXT NOT NULL DEFAULT 'pending',
+    token TEXT NOT NULL,
+    temp_password TEXT NOT NULL,
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT (CURRENT_TIMESTAMP + interval '24 hours'),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
@@ -14,6 +16,7 @@ CREATE TABLE pending_invitations (
 -- Create index for pending invitations
 CREATE INDEX idx_pending_invitations_email ON pending_invitations(email);
 CREATE INDEX idx_pending_invitations_family_id ON pending_invitations(family_id);
+CREATE INDEX idx_pending_invitations_token ON pending_invitations(token);
 
 -- Enable RLS for pending_invitations
 ALTER TABLE pending_invitations ENABLE ROW LEVEL SECURITY;

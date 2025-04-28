@@ -58,27 +58,28 @@ class _KinDoAppState extends State<KinDoApp> {
   void _handleLink(Uri uri) {
     if (kIsWeb) {
       // For web, handle the URL path and query parameters
-      if (uri.path.contains('verify-email')) {
-        final token = uri.queryParameters['token'];
-        final type = uri.queryParameters['type'];
-        
-        if (token != null && type == 'signup') {
+      // Remove the leading '#' if present
+      final path = uri.fragment.isNotEmpty 
+          ? uri.fragment 
+          : uri.path.replaceFirst('/', '');
+          
+      if (path.startsWith('password-setup')) {
+        final code = uri.queryParameters['code'];
+        if (code != null) {
           navigatorKey.currentState?.pushReplacementNamed(
             '/password-setup',
-            arguments: uri,
+            arguments: {'code': code},
           );
         }
       }
     } else {
       // For native platforms, handle the custom scheme
-      if (uri.host == 'verify-email') {
-        final token = uri.queryParameters['token'];
-        final type = uri.queryParameters['type'];
-        
-        if (token != null && type == 'signup') {
+      if (uri.host == 'password-setup') {
+        final code = uri.queryParameters['code'];
+        if (code != null) {
           navigatorKey.currentState?.pushReplacementNamed(
             '/password-setup',
-            arguments: uri,
+            arguments: {'code': code},
           );
         }
       }
@@ -104,9 +105,11 @@ class _KinDoAppState extends State<KinDoApp> {
         '/home': (context) => const HomeScreen(),
         '/profile': (context) => const ProfileScreen(),
         '/password-setup': (context) {
-          final uri = ModalRoute.of(context)?.settings.arguments as Uri?;
-          final token = uri?.queryParameters['token'] ?? '';
-          return PasswordSetupScreen(token: token);
+          final args = ModalRoute.of(context)?.settings.arguments;
+          if (args is Map<String, dynamic> && args['code'] != null) {
+            return PasswordSetupScreen(token: args['code']);
+          }
+          return const LoginScreen();
         },
       },
     );
@@ -128,10 +131,13 @@ class AuthWrapper extends StatelessWidget {
           );
         }
 
-        // Check if we have a pending password setup
-        final uri = ModalRoute.of(context)?.settings.arguments as Uri?;
-        if (uri?.host == 'verify-email' && uri?.queryParameters['type'] == 'signup') {
-          return PasswordSetupScreen(token: uri?.queryParameters['token'] ?? '');
+        // Check for invitation flow
+        final session = Supabase.instance.client.auth.currentSession;
+        if (session != null) {
+          final metadata = session.user.userMetadata;
+          if (metadata != null && metadata['type'] == 'invitation') {
+            return PasswordSetupScreen(invitationData: metadata);
+          }
         }
         
         return appState.isAuthenticated

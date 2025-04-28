@@ -26,13 +26,18 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
           return const Center(child: CircularProgressIndicator());
         }
 
-        // Apply filtering
+        // Apply filtering for the list only
         List<ShoppingItem> items = appState.shoppingList;
         if (_filterValue == 'purchased') {
           items = items.where((item) => item.isPurchased).toList();
         } else if (_filterValue == 'pending') {
           items = items.where((item) => !item.isPurchased).toList();
         }
+
+        // Get total counts for banner (unfiltered)
+        final totalItems = appState.shoppingList;
+        final pendingCount = totalItems.where((item) => !item.isPurchased).length;
+        final purchasedCount = totalItems.where((item) => item.isPurchased).length;
 
         return Scaffold(
           body: CustomScrollView(
@@ -90,13 +95,13 @@ class _ShoppingScreenState extends State<ShoppingScreen> {
                               _buildStatCard(
                                 context,
                                 'Pending',
-                                items.where((item) => !item.isPurchased).length.toString(),
+                                pendingCount.toString(),
                               ),
                               const SizedBox(width: 16),
                               _buildStatCard(
                                 context,
                                 'Purchased',
-                                items.where((item) => item.isPurchased).length.toString(),
+                                purchasedCount.toString(),
                               ),
                             ],
                           ),
