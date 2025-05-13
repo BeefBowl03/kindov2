@@ -80,16 +80,19 @@
     }
   </style>
 
-  <script src="flutter_bootstrap.js" async></script>
+  <!-- Updated Flutter bootstrap script -->
+  <script src="main.dart.js" defer></script>
   
   <script>
-    window.addEventListener('flutter-first-frame', function() {
+    window.addEventListener('load', function() {
       var loading = document.getElementById('loading');
-      loading.style.opacity = '0';
-      loading.style.transition = 'opacity 0.4s ease-out';
       setTimeout(function() {
-        loading.style.display = 'none';
-      }, 400);
+        loading.style.opacity = '0';
+        loading.style.transition = 'opacity 0.4s ease-out';
+        setTimeout(function() {
+          loading.style.display = 'none';
+        }, 400);
+      }, 2000); // Allow some time for Flutter initialization
     });
   </script>
 </body>

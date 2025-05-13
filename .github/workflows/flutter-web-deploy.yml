@@ -31,7 +31,11 @@ jobs:
       run: flutter pub get
 
     - name: Build Flutter Web
-      run: flutter build web --release --base-href /kindov2/
+      run: |
+        flutter build web --release \
+          --base-href /kindov2/ \
+          --web-renderer canvaskit \
+          --dart-define=Dart2jsOptimization=O4
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v3
