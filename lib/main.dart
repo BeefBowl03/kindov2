@@ -13,7 +13,7 @@ import 'providers/app_state.dart';
 import 'services/storage_service.dart';
 import 'services/deep_link_service.dart';
 import 'theme.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -173,100 +173,121 @@ class _KinDoAppState extends State<KinDoApp> {
           themeMode: appState.themeMode,
           initialRoute: '/',
           onGenerateRoute: (settings) {
-            // Parse the URI for web deep linking
-            final uri = Uri.parse(settings.name ?? '');
-            
-            // Check if this is a password setup or reset route
-            final isPasswordSetup = uri.path.contains('setup-password');
-            final isPasswordReset = uri.path.contains('reset-password');
-            
-            // Get the token from query parameters
-            final token = uri.queryParameters['token'] ?? uri.queryParameters['code'] ?? uri.queryParameters['access_token'];
-            final email = uri.queryParameters['email'];
-
-            // Handle routes that don't require authentication
-            if (isPasswordSetup) {
-              return MaterialPageRoute(
-                builder: (_) => PasswordSetupScreen(token: token),
-              );
+            // Handle GitHub Pages URL patterns for web
+            if (kIsWeb) {
+              final uri = Uri.parse(settings.name ?? '');
+              // If we're on GitHub Pages with a path pattern like /?/reset-password
+              if (uri.path == '/' && uri.fragment.isNotEmpty) {
+                // Extract the real path from the fragment
+                final realPath = uri.fragment;
+                // Create a new settings object with the actual path
+                final newSettings = RouteSettings(
+                  name: '/$realPath',
+                  arguments: settings.arguments
+                );
+                // Process with the real path
+                return _generateRoute(newSettings);
+              }
             }
-            
-            if (isPasswordReset) {
-              print('Route: found reset-password path with token: $token, email: $email');
-              return MaterialPageRoute(
-                builder: (_) => PasswordResetScreen(token: token),
-                settings: RouteSettings(
-                  arguments: {
-                    'code': token,
-                    'email': email,
-                    'is_reset': true
-                  }
-                ),
-              );
-            }
-
-            // Check authentication for other routes
-            final isAuth = Supabase.instance.client.auth.currentSession != null;
-            if (!isAuth && settings.name != '/login') {
-              return MaterialPageRoute(
-                builder: (_) => const LoginScreen(),
-              );
-            }
-
-            // Handle other routes normally
-            switch (settings.name) {
-              case '/':
-                return MaterialPageRoute(
-                  builder: (_) => const HomeScreen(),
-                );
-              case '/login':
-                return MaterialPageRoute(
-                  builder: (_) => const LoginScreen(),
-                );
-              case '/home':
-                return MaterialPageRoute(
-                  builder: (_) => const HomeScreen(),
-                );
-              case '/profile':
-                return MaterialPageRoute(
-                  builder: (_) => const ProfileScreen(),
-                );
-              case '/forgot-password':
-                return MaterialPageRoute(
-                  builder: (_) => PasswordResetScreen(),
-                  settings: RouteSettings(
-                    arguments: {'is_reset': false}
-                  ),
-                );
-              case '/invite-member':
-                return MaterialPageRoute(
-                  builder: (_) => const InviteMemberScreen(),
-                );
-              case '/debug':
-                return MaterialPageRoute(
-                  builder: (_) => const DebugScreen(),
-                );
-              case '/change-password':
-                return MaterialPageRoute(
-                  builder: (_) => const ChangePasswordScreen(),
-                );
-              case '/reset-password':
-                // This is for when we specifically navigate to this route with arguments
-                print('Route: /reset-password with arguments: ${settings.arguments}');
-                return MaterialPageRoute(
-                  builder: (_) => PasswordResetScreen(
-                    token: settings.arguments is Map<String, dynamic> ? 
-                      (settings.arguments as Map<String, dynamic>)['code'] : null
-                  ),
-                  settings: settings, // Pass along the original arguments
-                );
-              default:
-                return null;
-            }
+            // Regular route handling
+            return _generateRoute(settings);
           },
         );
       },
     );
+  }
+  
+  Route<dynamic>? _generateRoute(RouteSettings settings) {
+    // Parse the URI for web deep linking
+    final uri = Uri.parse(settings.name ?? '');
+    
+    // Check if this is a password setup or reset route
+    final isPasswordSetup = uri.path.contains('setup-password');
+    final isPasswordReset = uri.path.contains('reset-password');
+    
+    // Get the token from query parameters
+    final token = uri.queryParameters['token'] ?? uri.queryParameters['code'] ?? uri.queryParameters['access_token'];
+    final email = uri.queryParameters['email'];
+
+    // Handle routes that don't require authentication
+    if (isPasswordSetup) {
+      return MaterialPageRoute(
+        builder: (_) => PasswordSetupScreen(token: token),
+      );
+    }
+    
+    if (isPasswordReset) {
+      print('Route: found reset-password path with token: $token, email: $email');
+      return MaterialPageRoute(
+        builder: (_) => PasswordResetScreen(token: token),
+        settings: RouteSettings(
+          arguments: {
+            'code': token,
+            'email': email,
+            'is_reset': true
+          }
+        ),
+      );
+    }
+
+    // Check authentication for other routes
+    final isAuth = Supabase.instance.client.auth.currentSession != null;
+    if (!isAuth && settings.name != '/login') {
+      return MaterialPageRoute(
+        builder: (_) => const LoginScreen(),
+      );
+    }
+
+    // Handle other routes normally
+    switch (settings.name) {
+      case '/':
+        return MaterialPageRoute(
+          builder: (_) => const HomeScreen(),
+        );
+      case '/login':
+        return MaterialPageRoute(
+          builder: (_) => const LoginScreen(),
+        );
+      case '/home':
+        return MaterialPageRoute(
+          builder: (_) => const HomeScreen(),
+        );
+      case '/profile':
+        return MaterialPageRoute(
+          builder: (_) => const ProfileScreen(),
+        );
+      case '/forgot-password':
+        return MaterialPageRoute(
+          builder: (_) => PasswordResetScreen(),
+          settings: RouteSettings(
+            arguments: {'is_reset': false}
+          ),
+        );
+      case '/invite-member':
+        return MaterialPageRoute(
+          builder: (_) => const InviteMemberScreen(),
+        );
+      case '/debug':
+        return MaterialPageRoute(
+          builder: (_) => const DebugScreen(),
+        );
+      case '/change-password':
+        return MaterialPageRoute(
+          builder: (_) => const ChangePasswordScreen(),
+        );
+      case '/reset-password':
+        // This is for when we specifically navigate to this route with arguments
+        print('Route: /reset-password with arguments: ${settings.arguments}');
+        return MaterialPageRoute(
+          builder: (_) => PasswordResetScreen(
+            token: settings.arguments is Map<String, dynamic> ? 
+              (settings.arguments as Map<String, dynamic>)['code'] : null
+          ),
+          settings: settings, // Pass along the original arguments
+        );
+      default:
+        return null;
+    }
   }
 }
 

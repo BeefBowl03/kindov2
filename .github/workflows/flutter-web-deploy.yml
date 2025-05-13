@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - feature/new-branch
+      - working-mainv2
 
 jobs:
   build:
@@ -24,7 +25,7 @@ jobs:
       run: flutter pub get
 
     - name: Build Flutter Web
-      run: flutter build web --release
+      run: flutter build web --release --base-href /kindov2/
 
     - name: Deploy to GitHub Pages
       uses: peaceiris/actions-gh-pages@v4
