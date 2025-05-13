@@ -150,6 +150,14 @@ class ProfileScreen extends StatelessWidget {
                               onTap: () => _showEditProfileDialog(context, appState),
                             ),
                             const Divider(height: 1),
+                            _buildSettingsTile(
+                              context,
+                              'Change Password',
+                              'Update your account password',
+                              Icons.lock,
+                              onTap: () => Navigator.pushNamed(context, '/change-password'),
+                            ),
+                            const Divider(height: 1),
                             // Dark Mode Toggle
                             _buildSettingsTile(
                               context,
@@ -157,14 +165,9 @@ class ProfileScreen extends StatelessWidget {
                               'Toggle dark theme',
                               Icons.dark_mode,
                               trailing: Switch(
-                                value: Theme.of(context).brightness == Brightness.dark,
+                                value: appState.themeMode == ThemeMode.dark,
                                 onChanged: (value) {
-                                  // TODO: Implement dark mode toggle
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Dark mode coming soon!'),
-                                    ),
-                                  );
+                                  appState.setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
                                 },
                               ),
                             ),

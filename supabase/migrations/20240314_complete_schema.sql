@@ -117,24 +117,14 @@ CREATE POLICY "Users can view families they belong to" ON families
         )
     );
 
-CREATE POLICY "Parents can insert families" ON families
+CREATE POLICY "Users can create families during registration" ON families
     FOR INSERT WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM profiles
-            WHERE profiles.id = auth.uid()
-            AND profiles.is_parent = true
-        )
+        created_by = auth.uid()
     );
 
-CREATE POLICY "Parents can update their families" ON families
+CREATE POLICY "Family creators can update their families" ON families
     FOR UPDATE USING (
-        EXISTS (
-            SELECT 1 FROM family_members
-            JOIN profiles ON profiles.id = family_members.user_id
-            WHERE family_members.family_id = families.id
-            AND profiles.id = auth.uid()
-            AND profiles.is_parent = true
-        )
+        created_by = auth.uid()
     );
 
 -- Policies for profiles

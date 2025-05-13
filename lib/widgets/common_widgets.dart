@@ -156,6 +156,7 @@ class KinDoButton extends StatelessWidget {
   final bool isPrimary;
   final IconData? icon;
   final bool isFullWidth;
+  final bool isDisabled;
 
   const KinDoButton({
     super.key,
@@ -164,6 +165,7 @@ class KinDoButton extends StatelessWidget {
     this.isPrimary = true,
     this.icon,
     this.isFullWidth = false,
+    this.isDisabled = false,
   });
 
   @override
@@ -181,7 +183,7 @@ class KinDoButton extends StatelessWidget {
 
     return isPrimary
         ? ElevatedButton(
-            onPressed: onPressed,
+            onPressed: isDisabled ? null : onPressed,
             style: ElevatedButton.styleFrom(
               backgroundColor: Theme.of(context).colorScheme.primary,
               foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -194,7 +196,7 @@ class KinDoButton extends StatelessWidget {
             child: buttonContent,
           )
         : OutlinedButton(
-            onPressed: onPressed,
+            onPressed: isDisabled ? null : onPressed,
             style: OutlinedButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.primary,
               side: BorderSide(color: Theme.of(context).colorScheme.primary),

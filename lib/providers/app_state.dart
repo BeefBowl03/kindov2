@@ -23,9 +23,11 @@ class AppState extends ChangeNotifier {
   bool _isLoading = true;
   bool _isAuthenticated = false;
   String? _currentUserId;
+  ThemeMode _themeMode = ThemeMode.light;
 
   AppState(this._storage) {
     _initializeApp();
+    _loadThemeMode();
   }
 
   // Getters
@@ -37,6 +39,7 @@ class AppState extends ChangeNotifier {
   bool get isParent => _currentUser?.isParent ?? false;
   List<TaskModel> get tasks => _tasks;
   List<ShoppingItem> get shoppingList => _shoppingList;
+  ThemeMode get themeMode => _themeMode;
 
   List<TaskModel> get myTasks {
     if (_currentUser == null) return [];
@@ -159,38 +162,48 @@ class AppState extends ChangeNotifier {
 
       // Load family data if user has one
       if (profile['family_id'] != null) {
-        final familyData = await _supabase.getFamily(profile['family_id']);
-        if (familyData != null) {
-          _family = familyData;
-          
-          // Set up real-time subscriptions
-          _supabase.streamTasks(_family!.id).listen((tasks) {
-            _tasks = tasks.map((task) => TaskModel.fromJson(task)).toList();
-            notifyListeners();
-          });
-
-          _supabase.streamFamilyMembers(_family!.id).listen((members) async {
-            final updatedFamilyData = await _supabase.getFamily(_family!.id);
-            if (updatedFamilyData != null) {
-              _family = updatedFamilyData;
+        try {
+          final familyData = await _supabase.getFamily(profile['family_id']);
+          if (familyData != null) {
+            _family = familyData;
+            
+            // Set up real-time subscriptions
+            _supabase.streamTasks(_family!.id).listen((tasks) {
+              _tasks = tasks.map((task) => TaskModel.fromJson(task)).toList();
               notifyListeners();
-            }
-          });
+            });
 
-          // Load shopping list
-          await loadShoppingList();
+            _supabase.streamFamilyMembers(_family!.id).listen((members) async {
+              final updatedFamilyData = await _supabase.getFamily(_family!.id);
+              if (updatedFamilyData != null) {
+                _family = updatedFamilyData;
+                notifyListeners();
+              }
+            });
 
-          // Set up shopping list subscription
-          _supabase.streamShoppingList(_family!.id).listen((items) {
-            _shoppingList = items;
-            _storage.saveShoppingList(items);
-            notifyListeners();
-          });
+            // Load shopping list
+            await loadShoppingList();
+
+            // Set up shopping list subscription
+            _supabase.streamShoppingList(_family!.id).listen((items) {
+              _shoppingList = items;
+              _storage.saveShoppingList(items);
+              notifyListeners();
+            });
+          }
+        } catch (e) {
+          debugPrint('Error loading family data: $e');
+          // Don't throw here, just log the error and continue
         }
       }
 
       // Load tasks
-      _tasks = await _supabase.getTasks();
+      try {
+        _tasks = await _supabase.getTasks();
+      } catch (e) {
+        debugPrint('Error loading tasks: $e');
+        _tasks = [];
+      }
     } catch (e) {
       debugPrint('Error loading user data: $e');
       rethrow;
@@ -200,16 +213,41 @@ class AppState extends ChangeNotifier {
   // Family Management
   Future<void> createFamily(String name) async {
     if (_currentUser == null) return;
+    try {
+      print('Creating family in AppState: $name');
+      
+      final family = Family(
+        name: name,
+        createdBy: _currentUser!.id,
+        members: [_currentUser!],
+      );
 
-    final family = Family(
-      name: name,
-      createdBy: _currentUser!.id,
-      members: [_currentUser!],
-    );
+      // The service now returns the created family
+      _family = await _supabase.createFamily(family);
+      
+      print('Family created successfully with ID: ${_family!.id}');
+      
+      // Set up real-time subscriptions
+      if (_family != null) {
+        _supabase.streamTasks(_family!.id).listen((tasks) {
+          _tasks = tasks.map((task) => TaskModel.fromJson(task)).toList();
+          notifyListeners();
+        });
 
-    await _supabase.createFamily(family);
-    _family = family;
-    notifyListeners();
+        _supabase.streamFamilyMembers(_family!.id).listen((members) async {
+          final updatedFamilyData = await _supabase.getFamily(_family!.id);
+          if (updatedFamilyData != null) {
+            _family = updatedFamilyData;
+            notifyListeners();
+          }
+        });
+      }
+      
+      notifyListeners();
+    } catch (e) {
+      print('Error creating family in AppState: $e');
+      rethrow;
+    }
   }
 
   Future<void> addFamilyMember(FamilyMember member) async {
@@ -400,16 +438,23 @@ class AppState extends ChangeNotifier {
     required bool isParent,
   }) async {
     try {
-      // Send invitation email through Supabase
-      await _supabase.inviteFamilyMember(
+      // Use the SupabaseService to handle the invitation process
+      print('Creating family member: $email');
+      
+      if (family == null) {
+        throw Exception('No family found to add member to');
+      }
+      
+      final message = await _supabase.inviteFamilyMemberDirect(
         email: email,
         name: name,
         isParent: isParent,
         familyId: family!.id,
       );
-
-      return 'Invitation sent! The new member will need to verify their email to join.';
+      
+      return message;
     } catch (e) {
+      print('Error in createFamilyMember: $e');
       throw Exception('Failed to invite family member: ${e.toString()}');
     }
   }
@@ -503,5 +548,23 @@ class AppState extends ChangeNotifier {
     } catch (e) {
       throw 'Failed to complete invitation: ${e.toString()}';
     }
+  }
+
+  void setThemeMode(ThemeMode mode) {
+    _themeMode = mode;
+    _storage.setString('theme_mode', mode.toString());
+    notifyListeners();
+  }
+
+  Future<void> _loadThemeMode() async {
+    final mode = await _storage.getString('theme_mode');
+    if (mode == 'ThemeMode.dark') {
+      _themeMode = ThemeMode.dark;
+    } else if (mode == 'ThemeMode.light') {
+      _themeMode = ThemeMode.light;
+    } else if (mode == 'ThemeMode.system') {
+      _themeMode = ThemeMode.system;
+    }
+    notifyListeners();
   }
 } 

@@ -5,6 +5,10 @@ import 'screens/home_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/password_setup_screen.dart';
+import 'screens/password_reset_screen.dart';
+import 'screens/invite_member_screen.dart';
+import 'screens/debug_screen.dart';
+import 'screens/change_password_screen.dart';
 import 'providers/app_state.dart';
 import 'services/storage_service.dart';
 import 'services/deep_link_service.dart';
@@ -71,6 +75,39 @@ class _KinDoAppState extends State<KinDoApp> {
             arguments: {'code': code},
           );
         }
+      } else if (path.startsWith('reset-password')) {
+        final code = uri.queryParameters['code'] ?? 
+                    uri.queryParameters['token'] ?? 
+                    uri.queryParameters['access_token'];
+        final email = uri.queryParameters['email'];
+        
+        if (code != null) {
+          print('Deep link - redirecting to reset-password with code: $code and email: $email');
+          navigatorKey.currentState?.pushReplacementNamed(
+            '/reset-password',
+            arguments: {
+              'code': code,
+              'email': email,
+              'is_reset': true
+            },
+          );
+        }
+      } else if (path.startsWith('auth/confirm')) {
+        // Handle email confirmation
+        final token = uri.queryParameters['token'] ?? uri.queryParameters['confirmation_token'];
+        final email = uri.queryParameters['email'];
+        
+        if (token != null) {
+          // Redirect to password reset after confirming email
+          navigatorKey.currentState?.pushReplacementNamed(
+            '/reset-password',
+            arguments: {
+              'code': token,
+              'email': email,
+              'confirmation': true,
+            },
+          );
+        }
       }
     } else {
       // For native platforms, handle the custom scheme
@@ -80,6 +117,38 @@ class _KinDoAppState extends State<KinDoApp> {
           navigatorKey.currentState?.pushReplacementNamed(
             '/password-setup',
             arguments: {'code': code},
+          );
+        }
+      } else if (uri.host == 'reset-password') {
+        final code = uri.queryParameters['code'] ?? 
+                   uri.queryParameters['token'] ?? 
+                   uri.queryParameters['access_token'];
+        final email = uri.queryParameters['email'];
+        
+        if (code != null) {
+          print('Deep link (mobile) - redirecting to reset-password with code: $code and email: $email');
+          navigatorKey.currentState?.pushReplacementNamed(
+            '/reset-password',
+            arguments: {
+              'code': code,
+              'email': email,
+              'is_reset': true
+            },
+          );
+        }
+      } else if (uri.host == 'auth/confirm') {
+        // Handle email confirmation for mobile
+        final token = uri.queryParameters['token'] ?? uri.queryParameters['confirmation_token'];
+        final email = uri.queryParameters['email'];
+        
+        if (token != null) {
+          navigatorKey.currentState?.pushReplacementNamed(
+            '/reset-password',
+            arguments: {
+              'code': token,
+              'email': email,
+              'confirmation': true,
+            },
           );
         }
       }
@@ -94,23 +163,108 @@ class _KinDoAppState extends State<KinDoApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      title: 'KinDo',
-      theme: AppTheme.lightTheme,
-      initialRoute: '/',
-      routes: {
-        '/': (context) => const AuthWrapper(),
-        '/login': (context) => const LoginScreen(),
-        '/home': (context) => const HomeScreen(),
-        '/profile': (context) => const ProfileScreen(),
-        '/password-setup': (context) {
-          final args = ModalRoute.of(context)?.settings.arguments;
-          if (args is Map<String, dynamic> && args['code'] != null) {
-            return PasswordSetupScreen(token: args['code']);
-          }
-          return const LoginScreen();
-        },
+    return Consumer<AppState>(
+      builder: (context, appState, _) {
+        return MaterialApp(
+          navigatorKey: navigatorKey,
+          title: 'KinDo',
+          theme: AppTheme.lightTheme,
+          darkTheme: AppTheme.darkTheme,
+          themeMode: appState.themeMode,
+          initialRoute: '/',
+          onGenerateRoute: (settings) {
+            // Parse the URI for web deep linking
+            final uri = Uri.parse(settings.name ?? '');
+            
+            // Check if this is a password setup or reset route
+            final isPasswordSetup = uri.path.contains('setup-password');
+            final isPasswordReset = uri.path.contains('reset-password');
+            
+            // Get the token from query parameters
+            final token = uri.queryParameters['token'] ?? uri.queryParameters['code'] ?? uri.queryParameters['access_token'];
+            final email = uri.queryParameters['email'];
+
+            // Handle routes that don't require authentication
+            if (isPasswordSetup) {
+              return MaterialPageRoute(
+                builder: (_) => PasswordSetupScreen(token: token),
+              );
+            }
+            
+            if (isPasswordReset) {
+              print('Route: found reset-password path with token: $token, email: $email');
+              return MaterialPageRoute(
+                builder: (_) => PasswordResetScreen(token: token),
+                settings: RouteSettings(
+                  arguments: {
+                    'code': token,
+                    'email': email,
+                    'is_reset': true
+                  }
+                ),
+              );
+            }
+
+            // Check authentication for other routes
+            final isAuth = Supabase.instance.client.auth.currentSession != null;
+            if (!isAuth && settings.name != '/login') {
+              return MaterialPageRoute(
+                builder: (_) => const LoginScreen(),
+              );
+            }
+
+            // Handle other routes normally
+            switch (settings.name) {
+              case '/':
+                return MaterialPageRoute(
+                  builder: (_) => const HomeScreen(),
+                );
+              case '/login':
+                return MaterialPageRoute(
+                  builder: (_) => const LoginScreen(),
+                );
+              case '/home':
+                return MaterialPageRoute(
+                  builder: (_) => const HomeScreen(),
+                );
+              case '/profile':
+                return MaterialPageRoute(
+                  builder: (_) => const ProfileScreen(),
+                );
+              case '/forgot-password':
+                return MaterialPageRoute(
+                  builder: (_) => PasswordResetScreen(),
+                  settings: RouteSettings(
+                    arguments: {'is_reset': false}
+                  ),
+                );
+              case '/invite-member':
+                return MaterialPageRoute(
+                  builder: (_) => const InviteMemberScreen(),
+                );
+              case '/debug':
+                return MaterialPageRoute(
+                  builder: (_) => const DebugScreen(),
+                );
+              case '/change-password':
+                return MaterialPageRoute(
+                  builder: (_) => const ChangePasswordScreen(),
+                );
+              case '/reset-password':
+                // This is for when we specifically navigate to this route with arguments
+                print('Route: /reset-password with arguments: ${settings.arguments}');
+                return MaterialPageRoute(
+                  builder: (_) => PasswordResetScreen(
+                    token: settings.arguments is Map<String, dynamic> ? 
+                      (settings.arguments as Map<String, dynamic>)['code'] : null
+                  ),
+                  settings: settings, // Pass along the original arguments
+                );
+              default:
+                return null;
+            }
+          },
+        );
       },
     );
   }

@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../widgets/common_widgets.dart';
 import '../theme.dart';
 import '../providers/app_state.dart';
+import 'password_reset_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -48,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Please check your email to verify your account before logging in.'),
+                content: Text('Account created successfully! You can now log in.'),
                 duration: Duration(seconds: 10),
               ),
             );
@@ -212,6 +213,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       }
                       return null;
                     },
+                  ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => PasswordResetScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text('Forgot Password?'),
+                    ),
                   ),
                   const SizedBox(height: 24),
                   

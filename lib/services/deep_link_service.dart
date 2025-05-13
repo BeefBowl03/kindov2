@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:uni_links/uni_links.dart';
+import 'package:app_links/app_links.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -10,13 +10,14 @@ class DeepLinkService {
 
   StreamSubscription? _linkSubscription;
   bool _initialURILinkHandled = false;
+  final AppLinks _appLinks = AppLinks();
 
   Future<void> handleInitialUri(Function(Uri) onLink) async {
     if (!_initialURILinkHandled) {
       _initialURILinkHandled = true;
       try {
         if (!kIsWeb) {
-          final uri = await getInitialUri();
+          final uri = await _appLinks.getInitialLink();
           if (uri != null) {
             debugPrint('Initial URI received $uri');
             onLink(uri);
@@ -42,7 +43,7 @@ class DeepLinkService {
 
     if (!kIsWeb) {
       // Only set up stream listener for non-web platforms
-      _linkSubscription = uriLinkStream.listen(
+      _linkSubscription = _appLinks.uriLinkStream.listen(
         (Uri? uri) {
           debugPrint('Received URI: $uri');
           if (uri != null) {

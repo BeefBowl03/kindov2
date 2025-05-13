@@ -25,7 +25,33 @@ class _FamilyScreenState extends State<FamilyScreen> {
 
         final family = appState.family;
         if (family == null) {
-          return const Center(child: Text('No family found'));
+          return Center(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    size: 48,
+                    color: Colors.red,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No Family Found',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'You should already have a family from registration. Please contact support if this is an error.',
+                    style: Theme.of(context).textTheme.bodyLarge,
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
+            ),
+          );
         }
 
         return Scaffold(
@@ -79,14 +105,42 @@ class _FamilyScreenState extends State<FamilyScreen> {
                         child: Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            mainAxisAlignment: MainAxisAlignment.end,
                             children: [
-                              const Spacer(),
-                              if (appState.isParent)
-                                IconButton(
-                                  icon: const Icon(Icons.person_add, color: Colors.white),
-                                  onPressed: () => _showAddFamilyMemberBottomSheet(context),
-                                ),
+                              PopupMenuButton(
+                                icon: const Icon(Icons.more_vert, color: Colors.white),
+                                itemBuilder: (context) => [
+                                  if (appState.isParent) ...[
+                                    const PopupMenuItem(
+                                      value: 'profile',
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.person),
+                                          SizedBox(width: 8),
+                                          Text('My Profile'),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                  const PopupMenuItem(
+                                    value: 'logout',
+                                    child: Row(
+                                      children: [
+                                        Icon(Icons.logout),
+                                        SizedBox(width: 8),
+                                        Text('Logout'),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                                onSelected: (value) {
+                                  if (value == 'profile') {
+                                    Navigator.pushNamed(context, '/profile');
+                                  } else if (value == 'logout') {
+                                    appState.signOut();
+                                  }
+                                },
+                              ),
                             ],
                           ),
                         ),
@@ -306,20 +360,115 @@ class _FamilyScreenState extends State<FamilyScreen> {
                       );
                       
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(message),
-                            duration: const Duration(seconds: 4),
-                          ),
-                        );
-                        Navigator.pop(context);
+                        if (message.contains('already a member')) {
+                          // Simple dialog for existing members
+                          showDialog(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Already a Member'),
+                              content: Text(message),
+                              actions: [
+                                FilledButton(
+                                  onPressed: () => Navigator.of(context).pop(),
+                                  child: const Text('OK'),
+                                ),
+                              ],
+                            ),
+                          );
+                        } else {
+                          // Force a modal dialog with credentials
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (BuildContext dialogContext) {
+                              return WillPopScope(
+                                onWillPop: () async => false, // Prevent back button from closing dialog
+                                child: AlertDialog(
+                                  title: const Text(
+                                    'New User Created - Credentials',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 18,
+                                    ),
+                                  ),
+                                  content: SingleChildScrollView(
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Please share these credentials with the user:',
+                                          style: TextStyle(fontWeight: FontWeight.w500),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Container(
+                                          width: double.maxFinite,
+                                          padding: const EdgeInsets.all(16),
+                                          decoration: BoxDecoration(
+                                            color: Theme.of(context).colorScheme.surfaceVariant,
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(
+                                              color: Theme.of(context).colorScheme.primary.withOpacity(0.5),
+                                            ),
+                                          ),
+                                          child: SelectableText(
+                                            message,
+                                            style: const TextStyle(
+                                              fontFamily: 'monospace',
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          'The user must change their password after first login.',
+                                          style: TextStyle(
+                                            fontStyle: FontStyle.italic,
+                                            color: Theme.of(context).colorScheme.error,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  actions: [
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Theme.of(context).colorScheme.primary,
+                                        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+                                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                                      ),
+                                      onPressed: () {
+                                        Navigator.of(dialogContext).pop();
+                                        Navigator.of(context).pop(); // Close the invite dialog
+                                      },
+                                      child: const Text(
+                                        'OK, I WILL SHARE THIS',
+                                        style: TextStyle(fontWeight: FontWeight.bold),
+                                      ),
+                                    ),
+                                  ],
+                                  actionsAlignment: MainAxisAlignment.center,
+                                  actionsPadding: const EdgeInsets.only(bottom: 16),
+                                ),
+                              );
+                            },
+                          );
+                        }
                       }
                     } catch (e) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
+                        showDialog(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Error'),
                             content: Text('Error adding member: ${e.toString()}'),
-                            backgroundColor: Theme.of(context).colorScheme.error,
+                            actions: [
+                              FilledButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('OK'),
+                              ),
+                            ],
                           ),
                         );
                       }

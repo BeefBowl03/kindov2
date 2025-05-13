@@ -106,9 +106,31 @@ class TaskCard extends StatelessWidget {
                         Text(
                           task.formattedDueDate,
                           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: Theme.of(context).colorScheme.secondary,
+                                color: task.dueDate!.isBefore(DateTime.now()) && !task.isCompleted
+                                    ? Colors.red
+                                    : Theme.of(context).colorScheme.secondary,
                               ),
                         ),
+                        if (task.dueDate!.isBefore(DateTime.now()) && !task.isCompleted) ...[
+                          const SizedBox(width: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'Incomplete',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                          ),
+                        ],
                       ],
                     ),
                   if (task.points > 0)

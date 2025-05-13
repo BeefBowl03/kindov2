@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:flutter/foundation.dart';
 import '../providers/app_state.dart';
 
 class PasswordSetupScreen extends StatefulWidget {
@@ -23,11 +24,45 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
   bool _isLoading = false;
   String? _errorMessage;
   Map<String, dynamic>? _invitationData;
+  String? _token;
 
   @override
   void initState() {
     super.initState();
-    if (widget.token != null) {
+    
+    print('Initializing PasswordSetupScreen');
+    print('Widget token: ${widget.token}');
+    print('Widget invitationData: ${widget.invitationData}');
+    print('Current URL: ${Uri.base}');
+    print('Current fragment: ${Uri.base.fragment}');
+    
+    // Get token from fragment if not provided through widget
+    if (widget.token == null && kIsWeb) {
+      try {
+        final fragment = Uri.base.fragment;
+        print('Parsing fragment: $fragment');
+        if (fragment.contains('?')) {
+          final queryString = fragment.substring(fragment.indexOf('?') + 1);
+          print('Query string: $queryString');
+          final fragmentParams = Uri.splitQueryString(queryString);
+          print('Fragment params: $fragmentParams');
+          setState(() {
+            _token = fragmentParams['token'];
+          });
+        }
+      } catch (e) {
+        print('Error parsing fragment: $e');
+      }
+      print('Token from fragment: $_token');
+    } else {
+      setState(() {
+        _token = widget.token;
+      });
+      print('Token from widget: $_token');
+    }
+
+    if (_token != null) {
+      print('Proceeding with token verification: $_token');
       _verifyToken();
     } else if (widget.invitationData != null) {
       setState(() => _invitationData = widget.invitationData);
@@ -45,13 +80,22 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
     try {
       setState(() => _isLoading = true);
 
-      if (widget.token == null) {
+      final token = _token;
+      if (token == null) {
         throw 'Invalid invitation token';
       }
 
-      final token = widget.token!;
+      print('Starting token verification for: $token');
 
-      // Get the invitation data using the token
+      // First, try to get all pending invitations to debug
+      final allInvites = await Supabase.instance.client
+          .from('pending_invitations')
+          .select()
+          .eq('status', 'pending');
+      print('All pending invitations: $allInvites');
+
+      // Now try to get the specific invitation
+      print('Querying for invitation with token: $token');
       final data = await Supabase.instance.client
           .from('pending_invitations')
           .select()
@@ -59,24 +103,35 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
           .eq('status', 'pending')
           .maybeSingle();
 
+      print('Query result for token $token: $data');
+
       if (data == null) {
+        print('No invitation found for token: $token');
         throw 'Invalid or expired invitation token';
       }
 
       // Check if invitation has expired
       final expiresAt = DateTime.parse(data['expires_at'] as String);
+      print('Invitation expires at: $expiresAt');
+      print('Current time: ${DateTime.now()}');
+      
       if (expiresAt.isBefore(DateTime.now())) {
+        print('Invitation has expired');
         // Mark as expired
         await Supabase.instance.client
             .from('pending_invitations')
             .update({'status': 'expired'})
-            .eq('token', token)
-            .select();
+            .eq('token', token);
         throw 'This invitation has expired';
       }
 
+      print('Valid invitation found with data: $data');
       setState(() => _invitationData = data);
     } catch (e) {
+      print('Error in _verifyToken: $e');
+      if (e is PostgrestException) {
+        print('Postgrest error details: ${e.details}');
+      }
       setState(() => _errorMessage = e.toString());
     } finally {
       setState(() => _isLoading = false);
@@ -110,6 +165,8 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
     });
 
     try {
+      print('Creating account for invited user');
+      
       // Create the user account
       final response = await Supabase.instance.client.auth.signUp(
         email: _invitationData!['email'] as String,
@@ -119,6 +176,8 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
       if (response.user == null) {
         throw 'Failed to create account';
       }
+
+      print('Account created successfully, creating profile');
 
       // Create the user profile
       await Supabase.instance.client
@@ -131,6 +190,8 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
           })
           .select();
 
+      print('Profile created, adding to family');
+
       // Add user to the family
       await Supabase.instance.client
           .from('family_members')
@@ -140,15 +201,18 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
           })
           .select();
 
+      print('Added to family, marking invitation as used');
+
       // Mark invitation as used
-      if (widget.token != null) {
-        final token = widget.token!;
+      if (_token != null) {
         await Supabase.instance.client
             .from('pending_invitations')
             .update({'status': 'used'})
-            .eq('token', token)
+            .eq('token', _token!)
             .select();
       }
+
+      print('Setup completed successfully');
 
       if (!mounted) return;
 
@@ -161,6 +225,7 @@ class _PasswordSetupScreenState extends State<PasswordSetupScreen> {
 
       Navigator.of(context).pushReplacementNamed('/login');
     } catch (e) {
+      print('Error in password setup: $e');
       setState(() => _errorMessage = e.toString());
 
       if (!mounted) return;

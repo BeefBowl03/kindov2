@@ -6,16 +6,12 @@ CREATE OR REPLACE FUNCTION create_user_profile(
   is_parent BOOLEAN,
   family_name TEXT
 ) RETURNS void AS $$
+DECLARE
+  new_family_id UUID;
 BEGIN
   -- Start transaction
   BEGIN
-    -- Create family
-    WITH new_family AS (
-      INSERT INTO families (name, created_by, created_at, updated_at)
-      VALUES (family_name, user_id, NOW(), NOW())
-      RETURNING id
-    )
-    -- Create profile
+    -- Create profile first
     INSERT INTO profiles (id, name, email, is_parent, points, created_at, updated_at)
     VALUES (
       user_id,
@@ -27,10 +23,17 @@ BEGIN
       NOW()
     );
 
-    -- Create family member record
-    INSERT INTO family_members (family_id, user_id, created_at)
-    SELECT id, user_id, NOW()
-    FROM new_family;
+    -- If family_name is provided, create a new family
+    IF family_name IS NOT NULL AND family_name != '' THEN
+      -- Create family
+      INSERT INTO families (name, created_by, created_at, updated_at)
+      VALUES (family_name, user_id, NOW(), NOW())
+      RETURNING id INTO new_family_id;
+
+      -- Add user as family member
+      INSERT INTO family_members (family_id, user_id, created_at)
+      VALUES (new_family_id, user_id, NOW());
+    END IF;
 
     -- If we get here, commit the transaction
     COMMIT;
@@ -40,4 +43,4 @@ BEGIN
     RAISE EXCEPTION 'Failed to create user profile: %', SQLERRM;
   END;
 END;
-$$ LANGUAGE plpgsql; 
+$$ LANGUAGE plpgsql SECURITY DEFINER; 

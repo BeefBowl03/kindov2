@@ -3,6 +3,7 @@ import '../models/task_model.dart';
 import '../models/family_model.dart';
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'dart:math';
 
 class SupabaseService {
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -157,10 +158,32 @@ class SupabaseService {
     }
   }
 
-  Future<void> createFamily(Family family) async {
-    await _supabase
-        .from('families')
-        .insert(family.toJson());
+  Future<Family> createFamily(Family family) async {
+    try {
+      final response = await client.rpc(
+        'create_family_with_member',
+        params: {
+          'family_name': family.name,
+          'user_id': family.createdBy,
+          'user_name': family.members.first.name,
+          'is_parent': family.members.first.isParent,
+        },
+      );
+
+      if (response == null) {
+        throw 'Failed to create family';
+      }
+
+      return Family(
+        id: response['id'],
+        name: response['name'],
+        createdBy: response['created_by'],
+        members: family.members,
+      );
+    } catch (e) {
+      print('Error in createFamily: $e');
+      rethrow;
+    }
   }
 
   Future<void> updateFamily(Family family) async {
@@ -190,6 +213,10 @@ class SupabaseService {
   // Profile methods
   Future<Map<String, dynamic>> getProfile(String userId) async {
     try {
+      if (userId.isEmpty) {
+        throw Exception('User ID cannot be empty');
+      }
+
       // Get the profile
       final profileResponse = await _supabase
         .from('profiles')
@@ -197,6 +224,10 @@ class SupabaseService {
         .eq('id', userId)
         .single();
     
+      if (profileResponse == null) {
+        throw Exception('Profile not found for user: $userId');
+      }
+
       // Get the family member record
       final familyMemberResponse = await _supabase
           .from('family_members')
@@ -211,6 +242,10 @@ class SupabaseService {
             .eq('id', familyMemberResponse['family_id'])
             .single();
             
+        if (familyResponse == null) {
+          throw Exception('Family not found for user: $userId');
+        }
+
         // Combine the data
         return {
           ...profileResponse,
@@ -232,32 +267,63 @@ class SupabaseService {
     String? email,
     bool? isParent,
   }) async {
-    final updates = {
-      if (name != null) 'name': name,
-      if (email != null) 'email': email,
-      if (isParent != null) 'is_parent': isParent,
-    };
+    try {
+      if (userId.isEmpty) {
+        throw Exception('User ID cannot be empty');
+      }
 
-    await _supabase
-        .from('profiles')
-        .update(updates)
-        .eq('id', userId);
+      final updates = {
+        if (name != null) 'name': name,
+        if (email != null) 'email': email,
+        if (isParent != null) 'is_parent': isParent,
+      };
+
+      if (updates.isEmpty) {
+        throw Exception('No updates provided');
+      }
+
+      await _supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', userId);
+    } catch (e) {
+      print('Error in updateProfile: $e');
+      rethrow;
+    }
   }
 
   // Real-time subscriptions
   Stream<List<Map<String, dynamic>>> streamTasks(String familyId) {
+    if (familyId.isEmpty) {
+      throw Exception('Family ID cannot be empty');
+    }
+
     return _supabase
         .from('tasks')
         .stream(primaryKey: ['id'])
         .eq('family_id', familyId)
-        .order('created_at');
+        .order('created_at')
+        .map((data) => List<Map<String, dynamic>>.from(data))
+        .handleError((error) {
+          print('Error in task stream: $error');
+          return [];
+        });
   }
 
   Stream<List<Map<String, dynamic>>> streamFamilyMembers(String familyId) {
+    if (familyId.isEmpty) {
+      throw Exception('Family ID cannot be empty');
+    }
+
     return _supabase
         .from('family_members')
         .stream(primaryKey: ['family_id', 'user_id'])
-        .eq('family_id', familyId);
+        .eq('family_id', familyId)
+        .map((data) => List<Map<String, dynamic>>.from(data))
+        .handleError((error) {
+          print('Error in family members stream: $error');
+          return [];
+        });
   }
 
   Future<void> createUserProfile({
@@ -286,66 +352,30 @@ class SupabaseService {
     required String familyId,
   }) async {
     try {
-      // First clean up any expired invitations
-      await _supabase.rpc('expire_old_invitations');
-
-      // Check if user already exists
-      final existingUser = await _supabase
-          .from('profiles')
-          .select()
-          .eq('email', email)
-          .maybeSingle();
-
-      if (existingUser != null) {
-        throw Exception('A user with this email already exists');
-      }
-
-      // Check for existing pending invitation
-      final existingInvitation = await _supabase
-          .from('pending_invitations')
-          .select()
-          .eq('email', email)
-          .eq('status', 'pending')
-          .maybeSingle();
-
-      if (existingInvitation != null) {
-        throw Exception('There is already a pending invitation for this email');
-      }
-
-      // Generate a secure token
-      final token = const Uuid().v4();
-
-      // Create a new invitation record
-      await _supabase.from('pending_invitations').insert({
-        'email': email,
-        'name': name,
-        'is_parent': isParent,
-        'family_id': familyId,
-        'status': 'pending',
-        'token': token,
-        'expires_at': DateTime.now().add(const Duration(days: 7)).toIso8601String(),
-      });
-
-      // Generate invitation URL with token
-      final redirectUrl = kIsWeb 
-          ? '${Uri.base.origin}/#/password-setup?token=$token'
-          : 'kindo://password-setup?token=$token';
-
-      // Send signup email with redirect
-      await _supabase.auth.signUp(
-        email: email,
-        password: const Uuid().v4(), // Temporary password
-        emailRedirectTo: redirectUrl,
-        data: {
-          'type': 'invitation',
+      print('Inviting family member: $email');
+      
+      // Use the Edge Function instead of client-side user creation
+      final response = await _supabase.functions.invoke(
+        'invite-user',
+        body: {
+          'email': email,
           'name': name,
-          'is_parent': isParent,
-          'family_id': familyId,
-          'token': token,
+          'isParent': isParent,
+          'familyId': familyId,
         },
       );
-
+      
+      if (response.status != 200) {
+        final error = response.data['error'] ?? 'Unknown error';
+        print('Error from Edge Function: $error');
+        throw Exception('Failed to invite user: $error');
+      }
+      
+      print('Invitation sent successfully via Edge Function');
+      print('Response: ${response.data}');
+      
     } catch (e) {
+      print('Error in inviteFamilyMember: $e');
       throw Exception('Failed to invite family member: ${e.toString()}');
     }
   }
@@ -515,5 +545,194 @@ class SupabaseService {
           'is_purchased': item['is_purchased'],
           'added_by': item['created_by'],
         })).toList());
+  }
+
+  // Helper method to generate a random password
+  String generateRandomPassword() {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = Random.secure();
+    return List.generate(10, (index) => chars[random.nextInt(chars.length)]).join();
+  }
+  
+  // Test email delivery
+  Future<bool> testEmailDelivery(String email) async {
+    try {
+      print('Testing email delivery to: $email');
+      
+      final response = await _supabase.functions.invoke(
+        'test-email',
+        body: {
+          'email': email,
+        },
+      );
+      
+      if (response.status != 200) {
+        final error = response.data['error'] ?? 'Unknown error';
+        print('Error from test-email function: $error');
+        return false;
+      }
+      
+      print('Test email sent successfully');
+      print('Response: ${response.data}');
+      return true;
+    } catch (e) {
+      print('Error in testEmailDelivery: $e');
+      return false;
+    }
+  }
+  
+  // Invite family member directly without using Edge Functions
+  Future<String> inviteFamilyMemberDirect({
+    required String email,
+    required String name,
+    required bool isParent,
+    required String familyId,
+  }) async {
+    try {
+      print('Directly inviting family member: $email');
+      
+      // Generate a temporary password
+      final temporaryPassword = generateRandomPassword();
+      print('Generated temporary password: $temporaryPassword');
+      
+      // Check if user already exists
+      String userId = '';
+      bool userExists = false;
+      
+      try {
+        final existingUser = await _supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', email)
+            .maybeSingle();
+            
+        if (existingUser != null) {
+          userId = existingUser['id'];
+          userExists = true;
+          print('Found existing user ID: $userId');
+          
+          // Check if they're already in the family
+          final existingMember = await _supabase
+              .from('family_members')
+              .select()
+              .eq('family_id', familyId)
+              .eq('user_id', userId)
+              .maybeSingle();
+              
+          if (existingMember == null) {
+            // Add them to the family
+            await _supabase.from('family_members').insert({
+              'family_id': familyId,
+              'user_id': userId,
+            });
+            print('Added existing user to family');
+          } else {
+            print('User already in this family');
+            return 'User is already a member of this family.';
+          }
+        }
+      } catch (e) {
+        print('Error checking for existing user: $e');
+        // Continue to create new user if needed
+      }
+      
+      // If user doesn't exist, create them
+      if (!userExists) {
+        print('Creating new user account for: $email');
+        try {
+          final signUpResponse = await _supabase.auth.signUp(
+            email: email,
+            password: temporaryPassword,
+            data: {
+              'name': name,
+              'is_parent': isParent,
+              'family_id': familyId,
+              'temp_password': temporaryPassword,
+            },
+          );
+          
+          if (signUpResponse.user == null) {
+            throw Exception('Failed to create user account');
+          }
+          
+          userId = signUpResponse.user!.id;
+          print('User created with ID: $userId');
+          
+          // Create the profile
+          await _supabase.from('profiles').insert({
+            'id': userId,
+            'email': email,
+            'name': name,
+            'is_parent': isParent,
+          });
+          
+          print('User profile created');
+          
+          // Add to family
+          await _supabase.from('family_members').insert({
+            'family_id': familyId,
+            'user_id': userId,
+          });
+          
+          print('User added to family');
+        } catch (e) {
+          print('Error creating user: $e');
+          
+          // Check if user already exists error
+          if (e.toString().toLowerCase().contains('already registered') ||
+              e.toString().toLowerCase().contains('already exists')) {
+            
+            // Try to get existing user 
+            print('User already exists, trying to get existing user info');
+            userExists = true;
+            
+            try {
+              // Try to use magic link instead
+              await _supabase.auth.signInWithOtp(
+                email: email,
+              );
+              
+              print('Sent magic link to existing user');
+            } catch (authError) {
+              print('Error signing in existing user: $authError');
+              // We'll continue and just provide credentials
+            }
+          } else {
+            throw Exception('Failed to create user: $e');
+          }
+        }
+      }
+      
+      // Try to call the Edge Function (for logging purposes only)
+      try {
+        final response = await _supabase.functions.invoke(
+          'send-invitation-email',
+          body: {
+            'email': email,
+            'name': name,
+            'temporaryPassword': temporaryPassword,
+            'familyName': 'Your Family',
+            'isExistingUser': userExists,
+          },
+        );
+        print('Edge Function response (for logging): ${response.data}');
+      } catch (e) {
+        print('Edge Function error (non-critical): $e');
+      }
+      
+      print('Invitation process completed for: $email');
+      print('Temporary password is: $temporaryPassword');
+      
+      // For all users, return the login credentials
+      if (userExists) {
+        return 'Existing user added to your family.\n\nUser Credentials:\nEmail: $email\nPassword: Use existing password OR Temporary Password: $temporaryPassword\n\nPlease share these credentials with the user.';
+      } else {
+        return 'New user created!\n\nUser Credentials:\nEmail: $email\nTemporary Password: $temporaryPassword\n\nPlease share these credentials with the user. They should log in with these credentials and then change their password in their profile settings.';
+      }
+      
+    } catch (e) {
+      print('Error in inviteFamilyMemberDirect: $e');
+      throw Exception('Failed to invite family member: ${e.toString()}');
+    }
   }
 } 
