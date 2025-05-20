@@ -318,6 +318,12 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     String? selectedMemberId = appState.currentUserId;
     DateTime selectedDate = DateTime.now().add(const Duration(days: 1));
     int points = 0;
+    bool isRecurring = false;
+    String? recurrencePattern;
+    DateTime? recurrenceEndDate;
+    String? selectedCategory;
+    bool isCustomCategory = false;
+    final customCategoryController = TextEditingController();
 
     if (selectedMemberId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -332,12 +338,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
       backgroundColor: Colors.transparent,
       builder: (context) => StatefulBuilder(
         builder: (context, setState) => Container(
-          padding: EdgeInsets.fromLTRB(
-            24,
-            16,
-            24,
-            MediaQuery.of(context).viewInsets.bottom + 24,
-          ),
+          height: MediaQuery.of(context).size.height * 0.9,
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             borderRadius: const BorderRadius.only(
@@ -346,6 +347,7 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
             ),
           ),
           child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
@@ -385,6 +387,134 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                   controller: descriptionController,
                   isMultiline: true,
                 ),
+                const SizedBox(height: 16),
+                // Category Selection
+                Text(
+                  'Category',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 8),
+                if (!isCustomCategory) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                      ),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        value: selectedCategory,
+                        isExpanded: true,
+                        hint: const Text('Select a category'),
+                        icon: Icon(
+                          Icons.arrow_drop_down,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'chores', child: Text('Chores')),
+                          DropdownMenuItem(value: 'homework', child: Text('Homework')),
+                          DropdownMenuItem(value: 'personal', child: Text('Personal')),
+                          DropdownMenuItem(value: 'other', child: Text('Other')),
+                        ],
+                        onChanged: (value) {
+                          setState(() {
+                            if (value == 'other') {
+                              isCustomCategory = true;
+                              selectedCategory = null;
+                            } else {
+                              selectedCategory = value;
+                            }
+                          });
+                        },
+                      ),
+                    ),
+                  ),
+                ] else ...[
+                  Row(
+                    children: [
+                      Expanded(
+                        child: KinDoTextField(
+                          label: 'Custom Category',
+                          hint: 'Enter category name',
+                          controller: customCategoryController,
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          setState(() {
+                            isCustomCategory = false;
+                            customCategoryController.clear();
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+                const SizedBox(height: 16),
+                // Recurring Task Switch
+                SwitchListTile(
+                  title: const Text('Recurring Task'),
+                  value: isRecurring,
+                  onChanged: (value) {
+                    setState(() {
+                      isRecurring = value;
+                      if (!value) {
+                        recurrencePattern = null;
+                        recurrenceEndDate = null;
+                      }
+                    });
+                  },
+                ),
+                if (isRecurring) ...[
+                  const SizedBox(height: 8),
+                  // Recurrence Pattern Dropdown
+                  DropdownButtonFormField<String>(
+                    decoration: const InputDecoration(
+                      labelText: 'Repeat',
+                      border: OutlineInputBorder(),
+                    ),
+                    value: recurrencePattern,
+                    items: const [
+                      DropdownMenuItem(value: 'daily', child: Text('Daily')),
+                      DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                      DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        recurrencePattern = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  // Recurrence End Date
+                  ListTile(
+                    title: const Text('End Date'),
+                    subtitle: Text(
+                      recurrenceEndDate != null
+                          ? DateFormat('MMM dd, yyyy').format(recurrenceEndDate!)
+                          : 'No end date',
+                    ),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.calendar_today),
+                      onPressed: () async {
+                        final date = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now().add(const Duration(days: 30)),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(const Duration(days: 365)),
+                        );
+                        if (date != null) {
+                          setState(() {
+                            recurrenceEndDate = date;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 if (appState.family != null) ...[  
                   Text(
@@ -484,6 +614,20 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                       return;
                     }
 
+                    if (isRecurring && recurrencePattern == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please select a recurrence pattern')),
+                      );
+                      return;
+                    }
+
+                    if (isCustomCategory && customCategoryController.text.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Please enter a custom category')),
+                      );
+                      return;
+                    }
+
                     final newTask = TaskModel(
                       id: const Uuid().v4(),
                       title: titleController.text,
@@ -493,6 +637,10 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                       dueDate: selectedDate,
                       points: points,
                       familyId: appState.family!.id,
+                      isRecurring: isRecurring,
+                      recurrencePattern: recurrencePattern,
+                      recurrenceEndDate: recurrenceEndDate,
+                      category: isCustomCategory ? customCategoryController.text : selectedCategory,
                     );
 
                     appState.addTask(newTask);
@@ -526,6 +674,12 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
     DateTime selectedDate = task.dueDate ?? DateTime.now();
     int points = task.points;
     bool isEditing = false;
+    bool isRecurring = task.isRecurring;
+    String? recurrencePattern = task.recurrencePattern;
+    DateTime? recurrenceEndDate = task.recurrenceEndDate;
+    String? selectedCategory = task.category;
+    bool isCustomCategory = task.category != null && !['chores', 'homework', 'personal', 'other'].contains(task.category);
+    final customCategoryController = TextEditingController(text: isCustomCategory ? task.category ?? '' : '');
 
     showModalBottomSheet(
       context: context,
@@ -565,6 +719,12 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                               selectedMemberId = task.assignedTo;
                               selectedDate = task.dueDate ?? DateTime.now();
                               points = task.points;
+                              isRecurring = task.isRecurring;
+                              recurrencePattern = task.recurrencePattern;
+                              recurrenceEndDate = task.recurrenceEndDate;
+                              selectedCategory = task.category;
+                              isCustomCategory = task.category != null && !['chores', 'homework', 'personal', 'other'].contains(task.category);
+                              customCategoryController.text = isCustomCategory ? (task.category ?? '') : '';
                             }
                             isEditing = !isEditing;
                           });
@@ -815,6 +975,164 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                           points.toString(),
                           Icons.star_outline,
                         ),
+                      
+                      // Category
+                      if (isEditing) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          'Category',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 8),
+                        if (!isCustomCategory) ...[
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12),
+                            decoration: BoxDecoration(
+                              border: Border.all(
+                                color: Theme.of(context).colorScheme.outline.withOpacity(0.5),
+                              ),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                value: selectedCategory,
+                                isExpanded: true,
+                                hint: const Text('Select a category'),
+                                icon: Icon(
+                                  Icons.arrow_drop_down,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                items: const [
+                                  DropdownMenuItem(value: 'chores', child: Text('Chores')),
+                                  DropdownMenuItem(value: 'homework', child: Text('Homework')),
+                                  DropdownMenuItem(value: 'personal', child: Text('Personal')),
+                                  DropdownMenuItem(value: 'other', child: Text('Other')),
+                                ],
+                                onChanged: (value) {
+                                  setState(() {
+                                    if (value == 'other') {
+                                      isCustomCategory = true;
+                                      selectedCategory = null;
+                                    } else {
+                                      selectedCategory = value;
+                                    }
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        ] else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: KinDoTextField(
+                                  label: 'Custom Category',
+                                  hint: 'Enter category name',
+                                  controller: customCategoryController,
+                                ),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  setState(() {
+                                    isCustomCategory = false;
+                                    customCategoryController.clear();
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ],
+                      ] else if (task.category != null && !isEditing)
+                        _buildDetailRow(
+                          context,
+                          'Category',
+                          task.category!,
+                          Icons.category_outlined,
+                        ),
+                      
+                      // Recurring Task
+                      if (isEditing) ...[
+                        const SizedBox(height: 16),
+                        SwitchListTile(
+                          title: const Text('Recurring Task'),
+                          value: isRecurring,
+                          onChanged: (value) {
+                            setState(() {
+                              isRecurring = value;
+                              if (!value) {
+                                recurrencePattern = null;
+                                recurrenceEndDate = null;
+                              }
+                            });
+                          },
+                        ),
+                        if (isRecurring) ...[
+                          const SizedBox(height: 8),
+                          // Recurrence Pattern Dropdown
+                          DropdownButtonFormField<String>(
+                            decoration: const InputDecoration(
+                              labelText: 'Repeat',
+                              border: OutlineInputBorder(),
+                            ),
+                            value: recurrencePattern,
+                            items: const [
+                              DropdownMenuItem(value: 'daily', child: Text('Daily')),
+                              DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                              DropdownMenuItem(value: 'monthly', child: Text('Monthly')),
+                            ],
+                            onChanged: (value) {
+                              setState(() {
+                                recurrencePattern = value;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 8),
+                          // Recurrence End Date
+                          ListTile(
+                            title: const Text('End Date'),
+                            subtitle: Text(
+                              recurrenceEndDate != null
+                                  ? DateFormat('MMM dd, yyyy').format(recurrenceEndDate!)
+                                  : 'No end date',
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.calendar_today),
+                              onPressed: () async {
+                                final date = await showDatePicker(
+                                  context: context,
+                                  initialDate: DateTime.now().add(const Duration(days: 30)),
+                                  firstDate: DateTime.now(),
+                                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                                );
+                                if (date != null) {
+                                  setState(() {
+                                    recurrenceEndDate = date;
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ] else if (task.isRecurring && !isEditing) ...[
+                        const SizedBox(height: 16),
+                        _buildDetailRow(
+                          context,
+                          'Repeats',
+                          task.recurrencePattern == 'daily' ? 'Daily' :
+                            task.recurrencePattern == 'weekly' ? 'Weekly' :
+                            task.recurrencePattern == 'monthly' ? 'Monthly' : 'Custom',
+                          Icons.repeat,
+                        ),
+                        if (task.recurrenceEndDate != null)
+                          _buildDetailRow(
+                            context,
+                            'Until',
+                            DateFormat('MMM dd, yyyy').format(task.recurrenceEndDate!),
+                            Icons.event_available,
+                          ),
+                      ],
+                      
                       if (creator != null && !isEditing)
                         _buildDetailRow(
                           context,
@@ -851,6 +1169,20 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                         child: KinDoButton(
                           text: 'Save Changes',
                           onPressed: () {
+                            if (isCustomCategory && customCategoryController.text.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please enter a custom category')),
+                              );
+                              return;
+                            }
+
+                            if (isRecurring && recurrencePattern == null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Please select a recurrence pattern')),
+                              );
+                              return;
+                            }
+
                             final updatedTask = TaskModel(
                               id: task.id,
                               title: titleController.text,
@@ -861,6 +1193,10 @@ class _TaskScreenState extends State<TaskScreen> with SingleTickerProviderStateM
                               points: points,
                               isCompleted: task.isCompleted,
                               familyId: task.familyId,
+                              isRecurring: isRecurring,
+                              recurrencePattern: recurrencePattern,
+                              recurrenceEndDate: recurrenceEndDate,
+                              category: isCustomCategory ? customCategoryController.text : selectedCategory,
                             );
                             appState.updateTask(updatedTask);
                             Navigator.pop(context);

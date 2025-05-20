@@ -11,6 +11,10 @@ class TaskModel {
   final bool isCompleted;
   final int points;
   final String familyId;
+  final bool isRecurring;
+  final String? recurrencePattern; // 'daily', 'weekly', 'monthly'
+  final DateTime? recurrenceEndDate;
+  final String? category; // 'chores', 'homework', 'personal', 'other'
 
   TaskModel({
     String? id,
@@ -22,6 +26,10 @@ class TaskModel {
     this.isCompleted = false,
     this.points = 0,
     required this.familyId,
+    this.isRecurring = false,
+    this.recurrencePattern,
+    this.recurrenceEndDate,
+    this.category,
   }) : id = id ?? const Uuid().v4();
 
   String get formattedDueDate {
@@ -39,6 +47,10 @@ class TaskModel {
       'is_completed': isCompleted,
       'points': points,
       'family_id': familyId,
+      'is_recurring': isRecurring,
+      'recurrence_pattern': recurrencePattern,
+      'recurrence_end_date': recurrenceEndDate?.toIso8601String(),
+      'category': category,
     };
   }
 
@@ -53,6 +65,10 @@ class TaskModel {
       isCompleted: json['is_completed'] ?? false,
       points: json['points'] ?? 0,
       familyId: json['family_id'],
+      isRecurring: json['is_recurring'] ?? false,
+      recurrencePattern: json['recurrence_pattern'],
+      recurrenceEndDate: json['recurrence_end_date'] != null ? DateTime.parse(json['recurrence_end_date']) : null,
+      category: json['category'],
     );
   }
 
@@ -66,6 +82,10 @@ class TaskModel {
     bool? isCompleted,
     int? points,
     String? familyId,
+    bool? isRecurring,
+    String? recurrencePattern,
+    DateTime? recurrenceEndDate,
+    String? category,
   }) {
     return TaskModel(
       id: id ?? this.id,
@@ -77,6 +97,10 @@ class TaskModel {
       isCompleted: isCompleted ?? this.isCompleted,
       points: points ?? this.points,
       familyId: familyId ?? this.familyId,
+      isRecurring: isRecurring ?? this.isRecurring,
+      recurrencePattern: recurrencePattern ?? this.recurrencePattern,
+      recurrenceEndDate: recurrenceEndDate ?? this.recurrenceEndDate,
+      category: category ?? this.category,
     );
   }
 }
